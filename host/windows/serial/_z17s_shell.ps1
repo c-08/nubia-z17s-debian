@@ -1,6 +1,6 @@
 param(
-  [string]$CmdFile = "C:\Users\<用户名>\_z17s\cmds.txt",
-  [string]$LogFile = "C:\Users\<用户名>\_z17s\shell.log",
+  [string]$CmdFile = "$PSScriptRoot\cmds.txt",
+  [string]$LogFile = "$PSScriptRoot\shell.log",
   [int]$TimeoutSec = 70,
   [string]$PortName = "",
   [int]$Retries = 3

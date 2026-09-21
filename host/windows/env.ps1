@@ -1,13 +1,18 @@
 ﻿# Z17S 刷机环境变量
 #
 # 用法：在 PowerShell 里先执行一次（注意开头那个点和一个空格）
-#     . C:\Users\<用户名>\flash\env.ps1
+#     $env:Z17S_FLASH = "D:\your-flash-dir"   # 里面要有 platform-tools\adb.exe
+#     . .\env.ps1
 # 之后就可以直接用 $adb / $fastboot，不用每次写完整路径。
 #
 # 为什么要这么麻烦：这台机器 C:\Windows\adb.exe 是 2012 年的 adb 1.0.26，
 # 不支持 RSA 认证，连不上 Android 10。必须显式用新版。
 
-$FlashDir = "C:\Users\<用户名>\flash"
+param([string]$FlashDir = $env:Z17S_FLASH)
+if (-not $FlashDir) {
+    # 未指定 → 默认取本仓库根目录（把 platform-tools\ 放在那里即可）
+    $FlashDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+}
 
 # 把新版 platform-tools 放到 PATH 最前面
 $env:Path = "$FlashDir\platform-tools;$env:Path"

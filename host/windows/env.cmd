@@ -3,7 +3,8 @@ REM ===================================================================
 REM  Z17S flashing environment (cmd version)
 REM
 REM  Usage - run once in cmd:
-REM      C:\Users\<用户名>\flash\env.cmd
+REM      set Z17S_FLASH=D:\your-flash-dir   (must contain platform-tools\)
+REM      %Z17S_FLASH%\env.cmd
 REM  After that, adb / fastboot in this window are the new ones.
 REM
 REM  Why this is needed: C:\Windows\adb.exe on this machine is the 2012
@@ -11,7 +12,8 @@ REM  build (adb 1.0.26) which has no RSA auth and cannot talk to
 REM  Android 10.
 REM ===================================================================
 
-set "FLASH=C:\Users\<用户名>\flash"
+set "FLASH=%Z17S_FLASH%"
+if not defined FLASH set "FLASH=%~dp0..\.."
 
 REM put the new platform-tools first on PATH
 set "PATH=%FLASH%\platform-tools;%PATH%"

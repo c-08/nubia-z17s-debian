@@ -1,7 +1,7 @@
 param(
   [string]$PortName = "COM15",
   [int]$Seconds = 30,
-  [string]$LogFile = "C:\Users\<用户名>\_z17s\serial-passive.log"
+  [string]$LogFile = "$PSScriptRoot\serial-passive.log"
 )
 $ErrorActionPreference = "Continue"
 $sp = $null

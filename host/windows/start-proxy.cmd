@@ -3,19 +3,18 @@ rem Start the Z17S fallback internet proxy.  Runs as the CURRENT user (no admin 
 rem Keep this window open while you want the phone to have internet through this PC.
 rem ASCII only on purpose.
 rem
-rem NOTE on the interpreter choice: this PC already has an enabled *inbound allow*
-rem firewall rule for
-rem     C:\Users\<用户名>\<path-to-python.exe>
-rem (Private+Public, TCP, any port).  Windows Firewall silently drops inbound TCP on the
-rem RNDIS adapter otherwise (that network is on the Public profile), so we deliberately
-rem run the proxy with THAT interpreter.  Do not switch to another python without first
-rem adding a firewall rule.
+rem NOTE on the interpreter choice: Windows Firewall silently drops inbound TCP on the
+rem RNDIS adapter (that network is on the Public profile).  Inbound is therefore allowed
+rem only for programs that already have an *inbound allow* rule.
+rem   - If the phone cannot reach the proxy, add a rule for your python.exe (as admin):
+rem         netsh advfirewall firewall add rule name="z17s-proxy" dir=in action=allow ^
+rem               program="C:\path\to\python.exe" protocol=TCP
+rem   - Override the interpreter with:  set Z17S_PYTHON=C:\path\to\python.exe
 setlocal
 title Z17S fallback proxy (keep this window open)
 
-set PY=C:\Users\<用户名>\<path-to-python.exe>
-if not exist "%PY%" set PY=C:\Users\<用户名>\.workbuddy\binaries\python\envs\default\Scripts\python.exe
-if not exist "%PY%" set PY=python
+set PY=python
+if defined Z17S_PYTHON set PY=%Z17S_PYTHON%
 
 echo ============================================================
 echo  Z17S fallback internet proxy  (no administrator needed)

@@ -26,6 +26,21 @@
 
 ---
 
+## 📖 文档导航
+
+| 我想… | 看这里 |
+|---|---|
+| **第一次上手** —— 连上设备、日常操作、命令速查 | [docs/使用说明.md](docs/使用说明.md) |
+| **出问题了** —— 14 个故障的现象 / 判据 / 根因 / 修法 + 诊断方法论 | [docs/修复记录.md](docs/修复记录.md) |
+| **备份与恢复** —— 四层备份策略、恢复步骤、哪些操作会变砖 | [docs/备份与恢复.md](docs/备份与恢复.md) |
+| **卡死时怎么留证据** —— 三层日志与取证体系 | [docs/日志与取证.md](docs/日志与取证.md) |
+| **硬件到底能用什么** —— Wi-Fi / 蜂窝 / 蓝牙 / 音频的定量结论 | [docs/硬件现状.md](docs/硬件现状.md) |
+| **重编内核** —— 必改的配置项、编译产物校验 | [kernel/README.md](kernel/README.md) |
+
+> 全部文档为中文，按"**症状 → 判据 → 根因 → 修法**"组织，每个结论都带实测数据。
+
+---
+
 ## 为什么需要这个仓库
 
 上游的移植包能让你开机进 Debian，但会撞上四个**不看文档绝对想不到**的坑，每一个都能耗掉你一整天：
@@ -51,7 +66,9 @@
 │   ├── etc/NetworkManager/system-connections/z17s-usb0.nmconnection
 │   ├── etc/modprobe.d/10-z17s-unsafe-modules.conf        ← 黑名单 ipa.ko
 │   ├── etc/sysctl.d/10-z17s-console.conf                 ← 串口日志降噪
-│   └── usr/local/sbin/         各个 z17s-*.sh 脚本
+│   └── usr/local/sbin/         z17s-* 脚本
+│       ├── z17s-logwatch.py    ⭐ 日志守护：0.25s 落盘 + 每 10s 串口心跳
+│       └── z17s-screendump     远程读手机屏幕内容（/dev/vcsa1，不用拍照）
 ├── host/                       PC（宿主机）侧脚本
 │   ├── pull-chunks.sh          ⭐ **推荐**：分块 + 限速拉取数据归档（可续传、失败即停）
 │   ├── net-throttle.py         ⭐ PC 侧管道限速器（纯 stdlib；靠 TCP 反压让设备端 tar 也慢下来）
@@ -66,6 +83,7 @@
 │       └── serial/                 串口控制台工具
 ├── scripts/
 │   ├── install-on-device.sh    把 device/ 一键部署到手机
+│   ├── install-logwatch.sh     部署三层日志与取证体系（幂等，可重复跑）
 │   ├── backup-system.sh        设备侧备份 T1（boot + persist + 配置 + 包列表，20 秒）
 │   └── flash-boot-cgroupbpf.sh 安全刷 boot 分区（备份 → 写入 → 回读校验 → 装模块）
 ├── kernel/
@@ -75,8 +93,9 @@
 └── docs/
     ├── 使用说明.md             日常怎么用、怎么连、命令速查
     ├── 修复记录.md             14 个故障的现象/判据/根因/修法 + 诊断方法论
+    ├── 日志与取证.md           三层日志体系：卡死时怎么留下最后一条证据
     ├── 备份与恢复.md           四层备份策略与恢复步骤（含"RNDIS 不能搬整盘"的实测结论）
-    └── 硬件现状.md             WiFi / 蜂窝 / 其它外设的定性与结论
+    └── 硬件现状.md             Wi-Fi / 蜂窝 / 蓝牙 / 音频的定性与结论
 ```
 
 ---
