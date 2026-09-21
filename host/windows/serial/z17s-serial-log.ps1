@@ -68,16 +68,35 @@ function Get-CandidatePorts {
         if ($_.FriendlyName -match '\((COM\d+)\)') { [void]$list.Add($Matches[1]) }
       }
   } catch { }
-  # 2) 次选：注册表里登记过的全部串口
+  # 1.5) Hard-exclude on-board physical serial ports (ACPI\PNP0501 etc).
+  #      Real bug we hit: after COM15 disappeared, the on-board COM1 from
+  #      SERIALCOMM was still openable, so the logger latched onto COM1 forever
+  #      -- status said "port=COM1 idle", i.e. it *looked* like it was recording
+  #      while actually reading a dead port, and it never switched back when the
+  #      device re-enumerated on COM15.
+  $onboard = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+  try {
+    Get-PnpDevice -Class Ports -ErrorAction Stop |
+      Where-Object { $_.InstanceId -like 'ACPI\*' } |
+      ForEach-Object {
+        if ($_.FriendlyName -match '\((COM\d+)\)') { [void]$onboard.Add($Matches[1]) }
+      }
+  } catch { }
+  if ($onboard.Count -eq 0) { [void]$onboard.Add('COM1') }   # PnP scan failed -> fallback
+  # 2) Next: ports registered in the registry (skip on-board ones)
   try {
     $props = (Get-ItemProperty -Path 'HKLM:\HARDWARE\DEVICEMAP\SERIALCOMM').PSObject.Properties
     foreach ($p in $props) {
       if ($p.Name -like 'PS*') { continue }
-      if ("$($p.Value)" -match '^COM\d+$') { [void]$list.Add("$($p.Value)") }
+      if ("$($p.Value)" -match '^COM\d+$' -and -not $onboard.Contains("$($p.Value)")) {
+        [void]$list.Add("$($p.Value)")
+      }
     }
   } catch { }
-  # 3) 兜底：常见候选
-  foreach ($c in @('COM15','COM16','COM14','COM13','COM12','COM11','COM9')) { [void]$list.Add($c) }
+  # 3) Fallback: usual suspects (also skip on-board)
+  foreach ($c in @('COM15','COM16','COM14','COM13','COM12','COM11','COM9')) {
+    if (-not $onboard.Contains($c)) { [void]$list.Add($c) }
+  }
   return ($list | Select-Object -Unique)
 }
 
@@ -123,10 +142,17 @@ function Remove-OldLogs {
 $candidates = if ($PortName -eq 'auto') { Get-CandidatePorts } else { @($PortName) }
 Write-Host-Line ("[logger] candidate ports: " + ($candidates -join ', '))
 
-$open = Open-SerialPort -Candidates $candidates
-if (-not $open.Ok) {
-  Write-Host-Line "[logger] OPEN FAILED - no usable COM port. Device plugged in?"
-  exit 1
+# Do NOT exit when no port is found. A dead logger means nobody reads the
+# device console, and an unread console can block PID1's write() forever ->
+# the boot hangs hard and silently (see docs/修复记录.md §7.1). Waiting is safe.
+$open = @{ Ok = $false; Port = $null; Name = $null }
+while (-not $open.Ok) {
+  $open = Open-SerialPort -Candidates $candidates
+  if (-not $open.Ok) {
+    Write-Host-Line "[logger] no device port yet - plug in the Z17S USB cable, waiting ${ReopenDelayS}s..."
+    Start-Sleep -Seconds $ReopenDelayS
+    if ($PortName -eq 'auto') { $candidates = Get-CandidatePorts }
+  }
 }
 $sp = $open.Port
 $portName = $open.Name
@@ -191,6 +217,11 @@ try {
       try { if ($sp) { $sp.Dispose() } } catch { }
       $sp = $null
       Start-Sleep -Seconds $ReopenDelayS
+      # Re-scan every time: the COM number almost always changes after re-enumeration
+      if ($PortName -eq 'auto') {
+        $candidates = Get-CandidatePorts
+        Write-Host-Line ("[logger] re-scan candidates: " + ($candidates -join ', '))
+      }
       $re = Open-SerialPort -Candidates $candidates
       if ($re.Ok) {
         $sp = $re.Port
