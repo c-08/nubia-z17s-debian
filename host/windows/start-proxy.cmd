@@ -26,7 +26,10 @@ echo.
 echo  On the phone:
 echo     export http_proxy=http://192.168.137.1:3128
 echo     export https_proxy=http://192.168.137.1:3128
-echo     echo "nameserver 192.168.137.1" ^> /etc/resolv.conf
+echo     nmcli con mod z17s-usb0 ipv4.dns 192.168.137.1
+echo     nmcli device reapply usb0
+echo   (proxy mode has NO NAT, so DNS must point at this PC's relay.
+echo    Do NOT hand-edit /etc/resolv.conf - NetworkManager owns it and will wipe it.)
 echo.
 echo  Quick check from the phone:
 echo     curl -x http://192.168.137.1:3128 -o /dev/null -w "%%{http_code}\n" https://mirrors.aliyun.com/

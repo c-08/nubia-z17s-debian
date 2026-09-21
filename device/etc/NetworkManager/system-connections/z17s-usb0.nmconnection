@@ -9,7 +9,12 @@ interface-name=usb0
 
 [ipv4]
 address1=192.168.137.2/24
-dns=192.168.137.1;
+# DNS 不指向 PC 的 192.168.137.1 —— ICS 的 DNS 代理会静默失效（53 端口无响应），
+# 而 NAT 照常工作，症状是"能 ping 通 IP、域名全解析失败"（npm/curl 报 EAI_AGAIN）。
+# 公共 DNS 走 NAT 的 UDP 53，实测 223.5.5.5 26ms / 114.114.114.114 稳定。
+# 例外：若改用 host/windows/start-proxy.cmd 的用户态代理（无 NAT），
+#      要让 DNS 指回 192.168.137.1 —— 那个代理自带 DNS 转发。
+dns=223.5.5.5;114.114.114.114;
 gateway=192.168.137.1
 method=manual
 route-metric=1000

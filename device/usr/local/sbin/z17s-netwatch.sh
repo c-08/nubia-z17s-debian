@@ -40,9 +40,10 @@ if [ "${cur:-}" != "$want" ]; then
     ip route replace default via "$USB_GW" dev usb0 metric "$want" 2>/dev/null
     log "wifi_ok=$wifi_ok usb_ok=$usb_ok -> usb default metric $cur => $want"
     if [ "$want" = "$USB_METRIC_FAIL" ]; then
-        # NetworkManager only regenerates resolv.conf on link changes, so write one now.
-        printf '# z17s-netwatch: wifi gateway unreachable, DNS via USB RNDIS (PC ICS)\nnameserver 192.168.137.1\n' > /etc/resolv.conf
-        log "resolv.conf switched to 192.168.137.1"
+        # 不手写 /etc/resolv.conf —— NM 管着它，z17s-usb0 连接里已固定公共 DNS。
+        # 2026-09-21 教训：PC 侧 ICS 的 DNS 代理会静默失效（192.168.137.1:53 超时），
+        # 而 NAT 照常工作 → 现象是"能 ping 通 IP、域名全解析失败"（青龙装依赖 EAI_AGAIN）。
+        log "usb default metric -> $want (DNS left to NetworkManager)"
     fi
 fi
 

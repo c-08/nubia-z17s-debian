@@ -279,7 +279,8 @@ def main() -> int:
     log(f"  export http_proxy=http://192.168.137.1:{args.port}")
     log(f"  export https_proxy=http://192.168.137.1:{args.port}")
     if args.dns_port:
-        log(f"  nameserver 192.168.137.1        # in /etc/resolv.conf")
+        log("  nmcli con mod z17s-usb0 ipv4.dns 192.168.137.1   # proxy mode = no NAT, DNS must use this relay")
+        log("  nmcli device reapply usb0                          # do NOT hand-edit /etc/resolv.conf")
     log("Ctrl-C to stop.")
     try:
         srv.serve_forever()
