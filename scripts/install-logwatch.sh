@@ -3,11 +3,12 @@
 #
 #   usage: bash scripts/install-logwatch.sh [仓库根目录]
 #
-# 做四件事：
+# 做五件事：
 #   1. 装 z17s-logwatch.py  -> /usr/local/sbin（剥掉 CR，避免 CRLF 破坏 shebang）
 #   2. 装 z17s-logwatch.service -> /etc/systemd/system
 #   3. 装 journald 覆盖 10-z17s.conf -> /etc/systemd/journald.conf.d
-#   4. daemon-reload / journald restart / enable --now logwatch，然后验证
+#   4. mask 掉 serial-getty@ttyGS0（agetty 与心跳抢同一个 gadget 串口，见 §16）
+#   5. daemon-reload / journald restart / enable --now logwatch，然后验证
 #
 # 设计原则：不挂启动关键路径（踩过 z17s-usbnet 拖死开机的坑），
 #           journald 覆盖写错参数名不致命但要当场看日志确认。
@@ -77,15 +78,27 @@ journalctl -b -u systemd-journald -n 30 --no-pager 2>/dev/null \
   | grep -iE 'unknown|ignoring|invalid' | sed 's/^/  /' || echo "  (none)"
 
 # ---------------------------------------------------------------- 3. 服务
-say "3/4 启动 z17s-logwatch"
+say "3/5 屏蔽 ttyGS0 上的 agetty（与心跳抢同一个 gadget 串口）"
+# ⚠️ cmdline 里有 console=ttyGS0,115200n8，systemd-getty-generator 会**每次开机**
+#    自动生成 serial-getty@ttyGS0.service —— 所以只 disable 活不过重启，必须 mask。
+#    起因：agetty 与 systemd 成对 close 这个 tty，把 u_serial.c 的 port 计数打到 0：
+#      WARNING ... at drivers/usb/gadget/function/u_serial.c:691 gs_close+0x144/0x260
+#      Comm: systemd / (agetty)
+#    上一轮运行 6h15m 里出现 32 次，旁边跟着 dwc3 "request was not queued to ep1in"，
+#    怀疑与"整机停摆 + USB 再也枚举不上来"有关（详见 docs/修复记录.md §16）。
+#    回滚：systemctl unmask serial-getty@ttyGS0 && systemctl start serial-getty@ttyGS0
+systemctl mask serial-getty@ttyGS0.service >/dev/null 2>&1 || true
+
+say "4/5 启动 z17s-logwatch"
 systemctl daemon-reload
 systemctl enable z17s-logwatch >/dev/null 2>&1 || true
 systemctl restart z17s-logwatch
 sleep 3
 
 # ---------------------------------------------------------------- 4. 验证
-say "4/4 验证"
+say "5/5 验证"
 systemctl --no-pager --full status z17s-logwatch | head -14 || true
+echo "  serial-getty@ttyGS0: $(systemctl is-enabled serial-getty@ttyGS0.service 2>&1) / $(systemctl is-active serial-getty@ttyGS0.service 2>&1)  (期望 masked / inactive)"
 
 echo
 echo "--- 产物 ---"
