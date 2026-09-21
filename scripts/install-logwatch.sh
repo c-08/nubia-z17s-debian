@@ -43,6 +43,7 @@ install_one() {
 }
 
 install_one "usr/local/sbin/z17s-logwatch.py"          755
+install_one "usr/local/sbin/z17s-screendump"           755
 install_one "etc/systemd/system/z17s-logwatch.service" 644
 install_one "etc/systemd/journald.conf.d/10-z17s.conf" 644
 
@@ -95,13 +96,32 @@ echo "--- 日志开头 ---"
 head -c 600 /var/log/z17s-kmsg/latest 2>/dev/null | sed 's/^/  /' || echo "  (no log yet)"
 
 echo
-echo "--- 心跳是否已在串口上冒出来（等 12 秒）---"
+echo "--- 心跳（等 12 秒）---"
 sleep 12
-if journalctl -b -n 200 --no-pager 2>/dev/null | grep -q 'z17s-hb'; then
-  journalctl -b -n 200 --no-pager 2>/dev/null | grep 'z17s-hb' | tail -3 | sed 's/^/  /'
-  echo "  -> 心跳 OK。PC 侧串口记录器应该每 10 秒看到一行 z17s-hb"
+# ⚠️ 必须扫内核消息全量：不能加 -n，1Panel/docker 的日志刷得太快，
+#    200 条窗口里根本轮不到"每 10 秒才一条"的心跳（曾因此误报"心跳没起来"）
+if journalctl -b -k --no-pager 2>/dev/null | grep -q 'z17s-hb'; then
+  journalctl -b -k --no-pager 2>/dev/null | grep 'z17s-hb' | tail -3 | sed 's/^/  /'
+  echo "  -> 心跳 OK。PC 侧串口记录器应每 10 秒看到一行 z17s-hb"
+  echo "     （直写 /dev/ttyGS0，所以**没有** [ 1234.567890] 这种内核时间戳前缀 —— 那是 printk 的特征）"
 else
   echo "  !! 12 秒内没看到 z17s-hb，检查： journalctl -u z17s-logwatch -n 50"
+fi
+
+echo
+echo "--- 屏幕是否干净（心跳不该再刷屏）---"
+if [ -c /dev/vcsa1 ] && [ -x /usr/local/sbin/z17s-screendump ]; then
+  /usr/local/sbin/z17s-screendump -n 4 2>/dev/null | sed 's/^/  /' || true
+  # 头部 2 行是工具自己的标题，之后才是屏幕内容；干净时应只剩 Debian 横幅 + login:
+  nz="$(/usr/local/sbin/z17s-screendump -n 0 2>/dev/null | tail -n +3 | grep -c . || true)"
+  nz="${nz:-0}"
+  if [ "$nz" -le 6 ]; then
+    echo "  -> 屏幕干净（非空 ${nz} 行）✔"
+  else
+    echo "  !! 屏幕有 ${nz} 行非空内容 —— 有东西在往 console 写，查 z17s-hb 或内核报错"
+  fi
+else
+  echo "  (跳过：无 /dev/vcsa1 或无 z17s-screendump)"
 fi
 
 echo

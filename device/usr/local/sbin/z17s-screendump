@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+z17s-screendump —— 远程"看一眼"手机屏幕（把虚拟控制台内容 dump 成文本）
+
+为什么需要它：
+    设备没有键盘，屏幕是很直观的一路证据，但平时只能拿手机拍照 —— 又糊又慢。
+    本工具直读 /dev/vcsa<N>（虚拟控制台屏幕缓冲），不依赖任何图形环境，
+    一条 ssh 命令就能看到屏幕上现在到底是什么。
+
+    它还是验证"日志体系是否在刷屏"的唯一手段：本机 cmdline 是
+    `console=tty0 console=ttyGS0,115200n8`，所以屏幕 tty0 也是内核 console，
+    任何走 printk 的消息都会同时糊到屏幕上。
+
+用法：
+    z17s-screendump             # 看 tty1（默认，agetty 登录界面在这）
+    z17s-screendump 2           # 看 tty2
+    z17s-screendump -n 6        # 只看最后 6 个非空行
+    z17s-screendump -a          # 全部行（含空行，带行号）
+
+判读要点：
+    · 只有 `nx595j-debian13 login:`（2~3 行）→ 屏幕干净，没东西在刷它 ✔
+    · 满屏滚动日志                            → 有东西在往 console 写
+                                                （历史教训：z17s-hb 心跳曾刷满屏幕）
+"""
+
+import sys
+
+USAGE = "usage: z17s-screendump [-n N] [-a] [tty_number]"
+
+
+def parse_args(argv):
+    tty = 1
+    n = 40
+    show_all = False
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "-n":
+            i += 1
+            if i >= len(argv):
+                raise ValueError("-n needs a number")
+            n = int(argv[i])
+        elif a == "-a":
+            show_all = True
+        elif a in ("-h", "--help"):
+            print(__doc__.strip())
+            raise SystemExit(0)
+        elif a.isdigit():
+            tty = int(a)
+        else:
+            raise ValueError("unknown argument: %s" % a)
+        i += 1
+    return tty, n, show_all
+
+
+def read_screen(tty):
+    dev = "/dev/vcsa%d" % tty
+    try:
+        with open(dev, "rb") as fh:
+            data = fh.read()
+    except OSError as e:
+        sys.stderr.write("cannot read %s: %s\n" % (dev, e))
+        sys.stderr.write("tips: 该终端可能不存在，或 fbcon 未绑定（见 /sys/class/vtconsole）\n")
+        return None
+
+    if len(data) < 4:
+        sys.stderr.write("%s: too short (%d bytes)\n" % (dev, len(data)))
+        return None
+
+    rows, cols = data[0], data[1]
+    if len(data) < 4 + rows * cols * 2:
+        rows = max(0, (len(data) - 4) // (cols * 2))
+
+    out = []
+    for i in range(rows):
+        base = 4 + i * cols * 2
+        raw = bytes(data[base + j * 2] for j in range(cols))
+        out.append(raw.decode("utf-8", "replace").rstrip())
+    return rows, cols, out
+
+
+def main(argv):
+    try:
+        tty, n, show_all = parse_args(argv)
+    except ValueError as e:
+        sys.stderr.write("%s\n%s\n" % (e, USAGE))
+        return 2
+
+    res = read_screen(tty)
+    if res is None:
+        return 1
+    rows, cols, lines = res
+
+    print("tty%d: %d 行 x %d 列" % (tty, rows, cols))
+    if show_all:
+        for i, ln in enumerate(lines):
+            print("%3d|%s|" % (i, ln))
+        return 0
+
+    nonempty = [ln for ln in lines if ln.strip()]
+    if n:
+        print("非空行 %d / 共 %d 行，显示最后 %d 行：" % (len(nonempty), rows, n))
+    else:
+        print("非空行 %d / 共 %d 行，显示全部：" % (len(nonempty), rows))
+    sel = nonempty if not n else nonempty[-n:]
+    for ln in sel:
+        print("|" + ln + "|")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

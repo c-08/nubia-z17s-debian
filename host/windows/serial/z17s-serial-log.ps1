@@ -140,6 +140,8 @@ $totalBytes  = 0
 $reconnects  = 0
 $lastData    = $null
 $lastHeart   = $null
+$hbTail      = ''            # 心跳识别的滚动尾巴：USB 分包可能把 "z17s-hb" 拆到两块里
+$lastProbe   = ''            # 诊断用：最近一块数据的可打印形式（写进 status）
 $lastStallWarn = $null
 $lastStatus  = (Get-Date)
 $lastCleanup = (Get-Date)
@@ -168,6 +170,7 @@ function Write-Status {
     'total_bytes='    + $totalBytes,
     'last_data='      + $(if ($lastData)  { $lastData.ToString('yyyy-MM-dd HH:mm:ss') }  else { '(none)' }),
     'last_heartbeat=' + $(if ($lastHeart) { $lastHeart.ToString('yyyy-MM-dd HH:mm:ss') } else { '(none)' }),
+    'last_probe='     + $lastProbe,
     'reconnects='     + $reconnects
   )
   try { [System.IO.File]::WriteAllText($StatusFile, ($lines -join "`r`n") + "`r`n") } catch { }
@@ -216,7 +219,17 @@ try {
         }
         $lastData = Get-Date
 
-        if ($text -match 'z17s-hb') { $lastHeart = Get-Date }
+        # 心跳识别：把上一块的尾巴拼进来一起找。
+        # ⚠️ 不能只看单块 —— USB CDC/ACM 会分包，一行 42 字节可能被切成两块，
+        #    而 "z17s-hb" 恰好跨在切点上时就漏检（曾因此误报"设备卡死"）。
+        $probe = $hbTail + $text
+        if ($probe.Contains('z17s-hb')) { $lastHeart = Get-Date }
+        $hbTail = if ($probe.Length -gt 16) { $probe.Substring($probe.Length - 16) } else { $probe }
+
+        # 诊断：把这一块的可打印形式写进 status，出问题时一眼看清到底收到了什么
+        $lastProbe = ($text -replace '[^\x20-\x7E]', '?')
+        if ($lastProbe.Length -gt 50) { $lastProbe = $lastProbe.Substring(0, 50) }
+
         Write-Chunk $text
       }
     }

@@ -9,8 +9,19 @@ z17s-logwatch —— 内核日志低延迟落盘 + 存活心跳 + 现场快照
   3. RCU stall / 关中断死等时用户态进程完全不被调度 —— 此刻 journald 也停摆，
      实测 09-21 那次卡死，journald 一条都没写进去，证据只剩屏幕照片。
      本脚本把"最后一条写盘记录"压到 0.25 秒以内，至少保住停摆前那一刻；
-  4. 每 10 秒往 /dev/kmsg 投一条 KERN_ERR 心跳，会同步出现在串口上。
-     重启后看心跳断在哪一秒，就知道卡死发生的确切时刻 —— 不依赖任何用户态工具。
+  4. 每 10 秒往 USB gadget 串口（/dev/ttyGS0）直写一条心跳，重启后看它断在哪一秒，
+     就知道卡死发生的确切时刻 —— 不依赖任何用户态工具。
+
+     ⚠️ 心跳**刻意不走 /dev/kmsg**。本机 cmdline 是
+        `console=tty0 console=ttyGS0,115200n8`，手机屏幕 tty0 也是内核 console，
+        而 printk 会把同一条消息广播给**所有** console —— 于是屏幕被心跳刷满，
+        还把 tty1 上跑着的 agetty 登录提示符永久冲掉，用户据此误判"设备卡死"。
+        直写 ttyGS0 只喂串口，屏幕立刻恢复干净；kmsg 侧另留一条 <7> 级副本：
+        它照样进 journal 与本站日志文件，但 console_loglevel=4 会把它挡在屏幕之外。
+
+     ⚠️ 直写串口必须 O_NONBLOCK：PC 侧没人读串口时缓冲区会满，阻塞写会拖死本进程
+        （与 §7.1 "串口写阻塞拖死 systemd PID1" 是同一类雷）。非阻塞下写不进去就丢弃。
+     环境变量 Z17S_HB_TTY 可覆盖出口；设成空串则退回旧行为（走 kmsg KERN_ERR 上屏）。
 
 注意（不要对它抱幻想）：整机真正停摆时，本进程同样得不到调度，一样写不进去。
 那种场景唯一的取证途径是 PC 侧持续录串口（host/windows/serial/z17s-serial-log.ps1）。
@@ -36,6 +47,12 @@ import time
 
 KMSG = "/dev/kmsg"
 LOG_DIR = "/var/log/z17s-kmsg"
+
+# 心跳出口。默认直写 USB gadget 串口；设 Z17S_HB_TTY= (空) 退回旧行为（kmsg KERN_ERR 上屏）
+HB_TTY = os.environ.get("Z17S_HB_TTY", "/dev/ttyGS0").strip()
+# kmsg 里的心跳级别：有串口出口时用 DEBUG(7) —— 进 journal/文件但不上 console；
+# 没有串口出口时退回 ERR(3) —— 靠 printk 广播出去
+HB_LEVEL = 7 if HB_TTY else 3
 
 POLL_SEC = 0.1                 # 轮询间隔
 FLUSH_SEC = 0.25               # 最长多久强制 fsync 一次
@@ -94,6 +111,7 @@ class LogWatch(object):
         self.last_guard = 0.0
         self.dropped = 0
         self.seq = 0
+        self.ser_fd = None          # 心跳串口出口（懒打开，失败即重试）
 
     # ------------------------------------------------------------------ 文件
     def open_log(self):
@@ -205,18 +223,63 @@ class LogWatch(object):
             pass
 
     # ------------------------------------------------------------------ 心跳
+    def serial_write(self, text):
+        """直写 USB gadget 串口。
+
+        O_NONBLOCK 是硬要求：PC 侧没读串口时缓冲会满，阻塞写会拖死本进程
+        （§7.1 的老雷：串口控制台阻塞曾把 systemd PID1 卡了 82 分钟）。
+        非阻塞下写不进去就返回 EAGAIN，我们直接丢弃 —— 心跳丢了无所谓，卡住进程不行。
+        """
+        data = text.encode("utf-8", "replace")
+        for attempt in (0, 1):          # 第二次机会：USB 重连后节点会重建，重开一次
+            if self.ser_fd is None:
+                try:
+                    self.ser_fd = os.open(HB_TTY, os.O_WRONLY | os.O_NONBLOCK | os.O_NOCTTY)
+                    self._tty_raw(self.ser_fd)
+                except OSError as e:
+                    self.ser_fd = None
+                    if attempt:
+                        sys.stderr.write("z17s-logwatch: serial hb open failed: %s\n" % e)
+                    return
+            try:
+                os.write(self.ser_fd, data)
+                return
+            except OSError as e:
+                try:
+                    os.close(self.ser_fd)
+                except OSError:
+                    pass
+                self.ser_fd = None
+                if attempt:
+                    sys.stderr.write("z17s-logwatch: serial hb write failed: %s\n" % e)
+
+    @staticmethod
+    def _tty_raw(fd):
+        """关掉 ONLCR / ECHO：否则写入的 \\n 会被 tty 层改成 \\r\\n，串口日志里
+        一片多余的 CR（内核 console 直出时没有这个转换）。失败无所谓。"""
+        try:
+            import termios
+            attrs = termios.tcgetattr(fd)
+            attrs[1] &= ~termios.ONLCR       # oflag
+            attrs[3] &= ~termios.ECHO        # lflag
+            termios.tcsetattr(fd, termios.TCSANOW, attrs)
+        except Exception:
+            pass
+
     def heartbeat(self):
         up = uptime_sec()
         la = "/".join(read_text("/proc/loadavg").split()[:3]) or "?"
         # 1) 落到自己的日志文件（证明本进程还活着）
         self.write(("[z17s-hb] %s uptime=%.0fs load=%s file=%s\n"
                     % (now_iso(), up, la, os.path.basename(self.path or "-"))).encode())
-        # 2) 投到 /dev/kmsg，级别用 KERN_ERR(<3>) 是为了穿过 console_loglevel=4
-        #    出现在串口/屏幕上 —— 没有它，重启后无法判断停摆发生在哪一秒
+        line = "z17s-hb uptime=%.0f load=%s\n" % (up, la)
+        # 2) 只喂串口 —— 不走 printk，屏幕才不会被刷屏
+        if HB_TTY:
+            self.serial_write(line)
+        # 3) kmsg 留副本：默认 DEBUG 级，进 journal 与本站日志文件，但上不了 console
         try:
-            msg = ("<3>z17s-hb uptime=%.0f load=%s\n" % (up, la)).encode()
             with open(KMSG, "wb", buffering=0) as fh:
-                fh.write(msg)
+                fh.write(("<%d>%s" % (HB_LEVEL, line)).encode("utf-8", "replace"))
         except Exception:
             pass
 
@@ -382,6 +445,12 @@ class LogWatch(object):
 
         self.write(b"[z17s-logwatch] stopping (signal)\n")
         self.flush(force=True)
+        if self.ser_fd is not None:
+            try:
+                os.close(self.ser_fd)
+            except OSError:
+                pass
+            self.ser_fd = None
         for fh in (self.fh, self.snap_fh):
             try:
                 if fh:
