@@ -53,13 +53,15 @@
 │   ├── etc/sysctl.d/10-z17s-console.conf                 ← 串口日志降噪
 │   └── usr/local/sbin/         各个 z17s-*.sh 脚本
 ├── host/                       PC（宿主机）侧脚本
-│   ├── pull-rootfs.sh          ⭐ 从 PC 侧流式拉取根分区备份（**勿在设备上就地打包**）
+│   ├── pull-chunks.sh          ⭐ **推荐**：分块 + 限速拉取数据归档（可续传、失败即停）
+│   ├── net-throttle.py         ⭐ PC 侧管道限速器（纯 stdlib；靠 TCP 反压让设备端 tar 也慢下来）
+│   ├── pull-rootfs.sh          一把拉全盘（**实测 966 MB 就会把设备跑死**，默认别用）
 │   └── windows/
 │       ├── setup-rndis.ps1/.cmd    ICS 透明 NAT 一键配置（自提权）
 │       ├── z17s-proxy.py           ／降级方案：用户态 HTTP+DNS 代理
 │       ├── start-proxy.cmd
 │       ├── pull-backup.cmd         拉取 T1 关键分区备份
-│       ├── pull-rootfs.cmd         拉取 T2 根分区（双击版，自动找 Git Bash）
+│       ├── pull-rootfs.cmd         拉取整盘（双击版，自动找 Git Bash）
 │       ├── env.cmd / env.ps1       终端环境自检（PATH / adb）
 │       └── serial/                 串口控制台工具
 ├── scripts/
@@ -72,10 +74,27 @@
 │   └── config-6.12.95-running.txt   设备实跑内核的完整 .config（改动实证）
 └── docs/
     ├── 使用说明.md             日常怎么用、怎么连、命令速查
-    ├── 修复记录.md             13 个故障的现象/判据/根因/修法 + 诊断方法论
-    ├── 备份与恢复.md           备份策略与恢复步骤
+    ├── 修复记录.md             14 个故障的现象/判据/根因/修法 + 诊断方法论
+    ├── 备份与恢复.md           四层备份策略与恢复步骤（含"RNDIS 不能搬整盘"的实测结论）
     └── 硬件现状.md             WiFi / 蜂窝 / 其它外设的定性与结论
 ```
+
+---
+
+## ⚠️ 一条必须先知道的硬件级限制
+
+**不要把上 GB 的数据压到 USB/RNDIS 上搬。** 实测：
+
+| 实验 | 通道 | 结果 |
+|---|---|---|
+| 设备端读满 3.4 GB 磁盘（不走网络） | 纯磁盘 | ✅ 正常 |
+| 同一份数据经 SSH/RNDIS 传出 | RNDIS | ❌ **传出 966 MB 时整机硬卡死**（RCU stall，需断电重启） |
+
+触发条件是「大量存储读」+「USB 持续满载」的叠加。所以：
+
+- 搬数据请用 `host/pull-chunks.sh`（**分块 + 限速**，最要紧的排前面，失败即停）
+- 整盘镜像走 **TWRP + adb**
+- 关键分区只有几十 MB（`host/windows/pull-backup.cmd`），走 RNDIS 完全没问题
 
 ---
 

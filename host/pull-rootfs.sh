@@ -64,35 +64,54 @@ echo "======================================================================"
 #   · 排除模式一律用**相对**写法 `./xxx`：
 #     实测 GNU tar 1.35 里 `--exclude=/root/xxx` 匹配不上成员名 `./root/xxx`，
 #     会**静默失效**（这正是上次把归档文件打进自己的原因）
-REMOTE_CMD='set -e
-IONICE=""
-command -v ionice >/dev/null 2>&1 && IONICE="ionice -c3"
-nice -n 19 $IONICE tar -C / --one-file-system \
-  --exclude=./proc --exclude=./sys --exclude=./dev --exclude=./run \
-  --exclude=./tmp --exclude=./mnt --exclude=./media --exclude=./lost+found \
-  --exclude=./root/z17s-backup \
-  '"$([ "$SLIM" = 1 ] && echo '  --exclude=./var/lib/docker/overlay2 --exclude=./var/cache --exclude=./var/log --exclude=./var/lib/apt/lists ')"' \
-  -cf - .'
+# slim 模式追加的排除项。
+# ⚠️ 千万不要写成 `X="$( [ "$SLIM" = 1 ] && echo ... )"`：
+#    在 `set -e` 下，条件不成立时命令替换返回 1，会让整个脚本**静默退出**
+#    （2026-09-21 实战踩过：脚本 2 秒失败、连一行错误信息都没有）。
+SLIM_EXCLUDES=""
+if [ "$SLIM" = 1 ]; then
+    SLIM_EXCLUDES="--exclude=./var/lib/docker/overlay2 --exclude=./var/cache --exclude=./var/log --exclude=./var/lib/apt/lists"
+fi
+
+REMOTE_CMD="set -e
+IONICE=\"\"
+command -v ionice >/dev/null 2>&1 && IONICE=\"ionice -c3\"
+nice -n 19 \$IONICE tar -C / --one-file-system \\
+  --exclude=./proc --exclude=./sys --exclude=./dev --exclude=./run \\
+  --exclude=./tmp --exclude=./mnt --exclude=./media --exclude=./lost+found \\
+  --exclude=./root/z17s-backup \\
+  $SLIM_EXCLUDES \\
+  -cf - ."
 
 echo "[1/4] 开始拉取（首次约 5–15 分钟，取决于体积和 USB 速度）..."
 echo "      设备端只读；期间不要跑其他重 IO 任务"
 
 START=$(date +%s)
+SSH_ERR="$DEST/ssh-stderr.log"
+# ⚠️ 这里必须临时关掉 errexit：否则在 `set -e` + `pipefail` 下，
+#    管道一失败脚本就当场退出，下面的 RC 判断和错误提示永远执行不到，
+#    表现就是"失败原因一个字都看不到"。关掉才能拿到退出码再自己判断。
+set +e
 if [ "$COMPRESS" = "1" ]; then
     # shellcheck disable=SC2029
     ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$HOSTNAME_SSH" "$REMOTE_CMD" \
-        | gzip -1 > "$ARCHIVE"
+        2>"$SSH_ERR" | gzip -1 > "$ARCHIVE"
     RC=${PIPESTATUS[0]}
 else
     # shellcheck disable=SC2029
     ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=6 "$HOSTNAME_SSH" "$REMOTE_CMD" \
-        > "$ARCHIVE"
+        > "$ARCHIVE" 2>"$SSH_ERR"
     RC=$?
 fi
+set -e
 ELAPSED=$(( $(date +%s) - START ))
 
 if [ "$RC" != "0" ]; then
     echo "✗ 拉取中断（ssh/tar 退出码 $RC），用时 ${ELAPSED}s" >&2
+    if [ -s "$SSH_ERR" ]; then
+        echo "  --- ssh/tar stderr（最后 10 行）---" >&2
+        tail -10 "$SSH_ERR" >&2
+    fi
     echo "  已写入的部分保留在: $ARCHIVE" >&2
     echo "  → 先确认设备是否还在线：ping + ssh 测试；必要时重启设备后重跑本脚本" >&2
     exit 1
