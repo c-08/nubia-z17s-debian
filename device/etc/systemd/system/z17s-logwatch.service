@@ -1,0 +1,30 @@
+[Unit]
+Description=Z17S logwatch - persist kernel log with sub-second latency + heartbeat
+Documentation=file:/var/log/z17s-kmsg/
+# 刻意不挂 sysinit/basic 关键路径：晚几秒启动无妨，绝不能拖住开机
+After=local-fs.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/sbin/z17s-logwatch.py
+Restart=always
+RestartSec=3
+TimeoutStartSec=25
+TimeoutStopSec=10
+
+# 只负责"尽快把停摆前的日志钉在盘上"，不跟备份/容器抢 I/O
+Nice=-5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=3
+CPUWeight=150
+IOWeight=50
+OOMScoreAdjust=-800
+
+StandardOutput=null
+StandardError=journal
+SyslogIdentifier=z17s-logwatch
+
+[Install]
+WantedBy=multi-user.target

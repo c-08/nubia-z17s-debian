@@ -1,0 +1,401 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+z17s-logwatch —— 内核日志低延迟落盘 + 存活心跳 + 现场快照
+
+为什么不能只靠 journald：
+  1. journald 的 SyncIntervalSec 默认 300s —— 强断电（长按电源）最多丢 5 分钟日志；
+  2. journald 有速率限流，崩溃风暴（如 WCN3990 MSS crash 刷屏）时静默丢消息；
+  3. RCU stall / 关中断死等时用户态进程完全不被调度 —— 此刻 journald 也停摆，
+     实测 09-21 那次卡死，journald 一条都没写进去，证据只剩屏幕照片。
+     本脚本把"最后一条写盘记录"压到 0.25 秒以内，至少保住停摆前那一刻；
+  4. 每 10 秒往 /dev/kmsg 投一条 KERN_ERR 心跳，会同步出现在串口上。
+     重启后看心跳断在哪一秒，就知道卡死发生的确切时刻 —— 不依赖任何用户态工具。
+
+注意（不要对它抱幻想）：整机真正停摆时，本进程同样得不到调度，一样写不进去。
+那种场景唯一的取证途径是 PC 侧持续录串口（host/windows/serial/z17s-serial-log.ps1）。
+
+用法：
+    python3 /usr/local/sbin/z17s-logwatch.py          # 前台
+    systemctl enable --now z17s-logwatch              # 服务方式
+
+产物（默认 LOG_DIR=/var/log/z17s-kmsg）：
+    kmsg-<bootid8>-<启动时间>.log   内核日志，单文件 16MB，保留最近 12 个
+    snapshot-<bootid8>.log          每 60s 一份现场快照（mem/CPU/D 状态任务/USB）
+    boots.tsv                       每次开机登记一行
+    latest                          指向当前日志的符号链接
+"""
+
+import errno
+import glob
+import os
+import signal
+import subprocess
+import sys
+import time
+
+KMSG = "/dev/kmsg"
+LOG_DIR = "/var/log/z17s-kmsg"
+
+POLL_SEC = 0.1                 # 轮询间隔
+FLUSH_SEC = 0.25               # 最长多久强制 fsync 一次
+FLUSH_BYTES = 8192             # 或攒够这么多字节就 fsync
+HB_SEC = 10                    # 心跳周期
+SNAP_SEC = 60                  # 快照周期
+MAX_BYTES = 16 * 1024 * 1024   # 单日志文件上限
+KEEP_FILES = 12                # 保留几个历史日志
+MAX_PENDING = 4 * 1024 * 1024  # 积压上限，超出丢最旧的
+MIN_FREE_BYTES = 200 * 1024 * 1024   # 根分区低于此值就开始清旧日志
+
+_running = True
+
+
+def _on_signal(signum, frame):
+    global _running
+    _running = False
+
+
+def read_text(path, default=""):
+    try:
+        with open(path, "r", errors="replace") as fh:
+            return fh.read()
+    except Exception:
+        return default
+
+
+def now_iso():
+    lt = time.localtime()
+    return time.strftime("%Y-%m-%dT%H:%M:%S", lt) + time.strftime("%z", lt)
+
+
+def uptime_sec():
+    try:
+        return float(read_text("/proc/uptime", "0 0").split()[0])
+    except Exception:
+        return 0.0
+
+
+def boot_id():
+    return read_text("/proc/sys/kernel/random/boot_id", "unknown").strip() or "unknown"
+
+
+class LogWatch(object):
+    def __init__(self):
+        self.bid = boot_id()
+        self.short = self.bid.split("-")[0]
+        self.path = None
+        self.fh = None
+        self.snap_path = None
+        self.snap_fh = None
+        self.buf = bytearray()
+        self.last_flush = time.monotonic()
+        self.last_hb = 0.0
+        self.last_snap = 0.0
+        self.last_guard = 0.0
+        self.dropped = 0
+        self.seq = 0
+
+    # ------------------------------------------------------------------ 文件
+    def open_log(self):
+        # 命名策略：一次开机一个文件（kmsg-<bootid8>.log），服务重启就追加，
+        # 只有超过 MAX_BYTES 才递增编号 kmsg-<bootid8>.1.log …
+        # 好处：同一 boot 内不会因为 systemctl restart 碎成一堆文件，
+        #       而每次开机天然分开，跨重启对比一目了然。
+        base = os.path.join(LOG_DIR, "kmsg-%s" % self.short)
+        idx = 0
+        while True:
+            name = "%s.log" % base if idx == 0 else "%s.%d.log" % (base, idx)
+            path = os.path.join(LOG_DIR, name)
+            if not os.path.exists(path) or os.path.getsize(path) < MAX_BYTES:
+                break
+            idx += 1
+        self.path = path
+        # buffering=0 → write() 直接进 syscall，不会被 Python 缓冲挡住
+        self.fh = open(path, "ab", buffering=0)
+        link = os.path.join(LOG_DIR, "latest")
+        try:
+            if os.path.lexists(link):
+                os.unlink(link)
+            os.symlink(os.path.basename(self.path), link)
+        except OSError:
+            pass
+
+    def open_snapshot(self):
+        self.snap_path = os.path.join(LOG_DIR, "snapshot-%s.log" % self.short)
+        self.snap_fh = open(self.snap_path, "ab", buffering=0)
+
+    def cleanup(self, keep=None):
+        keep = KEEP_FILES if keep is None else keep
+        files = sorted(glob.glob(os.path.join(LOG_DIR, "kmsg-*.log")), key=os.path.getmtime)
+        if len(files) <= keep:
+            return
+        for old in files[:-keep]:
+            try:
+                os.unlink(old)
+            except OSError:
+                pass
+
+    def rotate(self):
+        if self.fh is None:
+            return
+        try:
+            size = self.fh.tell()
+        except Exception:
+            return
+        if size < MAX_BYTES:
+            return
+        self.flush(force=True)
+        try:
+            self.fh.close()
+        except Exception:
+            pass
+        self.cleanup()
+        self.open_log()
+        self.write(("[z17s-logwatch] rotated -> %s\n" % os.path.basename(self.path)).encode())
+
+    def guard_space(self):
+        try:
+            st = os.statvfs(LOG_DIR)
+            free = st.f_bavail * st.f_frsize
+        except Exception:
+            return
+        if free < MIN_FREE_BYTES:
+            self.write(("[z17s-logwatch] !! low space (%d MB free), pruning old logs !!\n"
+                        % (free // 1048576)).encode())
+            self.flush(force=True)
+            self.cleanup(keep=2)
+
+    # ------------------------------------------------------------------ 写盘
+    def write(self, data):
+        if not data:
+            return
+        self.buf += data
+        if len(self.buf) > MAX_PENDING:
+            over = len(self.buf) - MAX_PENDING // 2
+            del self.buf[:over]
+            self.dropped += over
+            self.buf += ("[z17s-logwatch] !! dropped %d bytes (writer too slow) !!\n"
+                         % over).encode()
+
+    def flush(self, force=False):
+        if not self.buf:
+            return
+        if not force and len(self.buf) < FLUSH_BYTES and (time.monotonic() - self.last_flush) < FLUSH_SEC:
+            return
+        chunk = bytes(self.buf)
+        self.buf = bytearray()
+        try:
+            self.fh.write(chunk)
+            os.fdatasync(self.fh.fileno())      # 真正落盘，不是只进 page cache
+        except Exception as e:
+            sys.stderr.write("z17s-logwatch: write failed: %s\n" % e)
+            try:
+                sys.stderr.flush()
+            except Exception:
+                pass
+        self.last_flush = time.monotonic()
+
+    def snap_write(self, text):
+        if self.snap_fh is None:
+            return
+        try:
+            self.snap_fh.write(text.encode("utf-8", "replace"))
+            os.fdatasync(self.snap_fh.fileno())
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------ 心跳
+    def heartbeat(self):
+        up = uptime_sec()
+        la = "/".join(read_text("/proc/loadavg").split()[:3]) or "?"
+        # 1) 落到自己的日志文件（证明本进程还活着）
+        self.write(("[z17s-hb] %s uptime=%.0fs load=%s file=%s\n"
+                    % (now_iso(), up, la, os.path.basename(self.path or "-"))).encode())
+        # 2) 投到 /dev/kmsg，级别用 KERN_ERR(<3>) 是为了穿过 console_loglevel=4
+        #    出现在串口/屏幕上 —— 没有它，重启后无法判断停摆发生在哪一秒
+        try:
+            msg = ("<3>z17s-hb uptime=%.0f load=%s\n" % (up, la)).encode()
+            with open(KMSG, "wb", buffering=0) as fh:
+                fh.write(msg)
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------ 快照
+    def snapshot(self):
+        out = []
+        ap = out.append
+        ap("=" * 74)
+        ap("[z17s-snap] %s uptime=%.0fs" % (now_iso(), uptime_sec()))
+        ap("loadavg : " + read_text("/proc/loadavg").strip())
+        wanted = ("MemTotal", "MemFree", "MemAvailable", "Buffers", "Cached",
+                  "Dirty", "Writeback", "SwapFree")
+        for ln in read_text("/proc/meminfo").splitlines():
+            if ln.split(":")[0] in wanted:
+                ap("mem     : " + ln.strip())
+        ap("--- per-cpu jiffies (user nice sys idle iowait irq softirq) ---")
+        for ln in read_text("/proc/stat").splitlines():
+            if ln.startswith("cpu"):
+                ap("stat    : " + ln.strip())
+        # D 状态（不可中断睡眠）任务 —— 卡死时看谁挂在哪个内核函数
+        ap("--- D-state tasks (uninterruptible) ---")
+        found = False
+        try:
+            for d in sorted(os.listdir("/proc")):
+                if not d.isdigit():
+                    continue
+                try:
+                    st = read_text("/proc/%s/stat" % d)
+                    rp = st.rindex(")")
+                    fields = st[rp + 2:].split()
+                    if not fields or fields[0] != "D":
+                        continue
+                    comm = st[st.index("(") + 1:rp]
+                    wchan = read_text("/proc/%s/wchan" % d).strip()
+                    ap("D-task  : pid=%-6s comm=%-18s wchan=%s" % (d, comm, wchan))
+                    found = True
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        if not found:
+            ap("D-task  : (none)")
+        # 中断计数（USB / MSS / 定时器）
+        ap("--- interrupts (msm/dwc3/qcom) ---")
+        for ln in read_text("/proc/interrupts").splitlines()[1:]:
+            low = ln.lower()
+            if any(k in low for k in ("dwc3", "usb", "msm", "q6", "timer", "arch_timer")):
+                ap("irq     : " + " ".join(ln.split()))
+        ap("--- usb gadget / net ---")
+        for udc in glob.glob("/sys/class/udc/*"):
+            ap("udc     : %s state=%s" % (os.path.basename(udc),
+                                          read_text(os.path.join(udc, "state")).strip() or "?"))
+        ap("usb0    : " + (read_text("/sys/class/net/usb0/operstate").strip() or "?"))
+        for ln in read_text("/proc/net/dev").splitlines():
+            if "usb0" in ln:
+                ap("netdev  : " + " ".join(ln.split()))
+        ap("")
+        self.snap_write("\n".join(out) + "\n")
+
+    # ------------------------------------------------------------------ 读 kmsg
+    @staticmethod
+    def fmt(raw):
+        """<prio>,<seq>,<usec>,<flags>;<message> -> [  123.456789] <prio> message"""
+        try:
+            meta, _, msg = raw.partition(b";")
+            prio, _seq, usec, _flags = meta.split(b",")
+            text = "[%13.6f] <%s> %s" % (int(usec) / 1e6, prio.decode(),
+                                         msg.decode("utf-8", "replace"))
+            if not text.endswith("\n"):
+                text += "\n"
+            return text.encode("utf-8", "replace")
+        except Exception:
+            if not raw.endswith(b"\n"):
+                raw += b"\n"
+            return raw
+
+    def pump(self, fd):
+        for _ in range(8192):
+            try:
+                raw = os.read(fd, 65536)
+            except BlockingIOError:
+                return
+            except OSError as e:
+                if e.errno == errno.EPIPE:
+                    self.write(b"[z17s-logwatch] !! EPIPE: ring buffer overwritten, gap in log !!\n")
+                else:
+                    self.write(("[z17s-logwatch] !! kmsg read error: %s !!\n" % e).encode())
+                return
+            if not raw:
+                return
+            self.seq += 1
+            self.write(self.fmt(raw))
+
+    def tick(self):
+        now = time.monotonic()
+        if self.buf and (len(self.buf) >= FLUSH_BYTES or (now - self.last_flush) >= FLUSH_SEC):
+            self.flush(force=True)
+        if (now - self.last_hb) >= HB_SEC:
+            self.heartbeat()
+            self.last_hb = now
+        if (now - self.last_snap) >= SNAP_SEC:
+            self.snapshot()
+            self.last_snap = now
+        if (now - self.last_guard) >= 300:
+            self.guard_space()
+            self.last_guard = now
+        self.rotate()
+
+    # ------------------------------------------------------------------ 入口
+    def boots_record(self):
+        p = os.path.join(LOG_DIR, "boots.tsv")
+        fresh = not os.path.exists(p)
+        try:
+            with open(p, "a") as fh:
+                if fresh:
+                    fh.write("# boot_id\trelease\tfirst_seen\tuptime_at_start\n")
+                fh.write("%s\t%s\t%s\t%.1f\n" % (self.bid, os.uname().release, now_iso(), uptime_sec()))
+                fh.flush()
+                os.fdatasync(fh.fileno())
+        except Exception:
+            pass
+
+    def run(self):
+        os.makedirs(LOG_DIR, exist_ok=True)
+        self.boots_record()
+        self.open_log()
+        self.open_snapshot()
+        self.write(("[z17s-logwatch] start pid=%d boot_id=%s kernel=%s host=%s\n"
+                    % (os.getpid(), self.bid, os.uname().release, os.uname().nodename)).encode())
+        # 脚本启动前 ring buffer 里已有的内容（也就是本次开机日志）先整体落下来
+        try:
+            dump = subprocess.run(["dmesg", "--time-format=iso"],
+                                  capture_output=True, timeout=30).stdout
+            self.write(b"[z17s-logwatch] --- initial dmesg dump ---\n" + dump)
+            if not dump.endswith(b"\n"):
+                self.write(b"\n")
+            self.write(b"[z17s-logwatch] --- live follow starts ---\n")
+        except Exception as e:
+            self.write(("[z17s-logwatch] initial dmesg dump failed: %s\n" % e).encode())
+        self.flush(force=True)
+
+        try:
+            kfd = os.open(KMSG, os.O_RDONLY | os.O_NONBLOCK)
+        except Exception as e:
+            sys.stderr.write("z17s-logwatch: cannot open %s: %s\n" % (KMSG, e))
+            return 2
+
+        sys.stderr.write("z17s-logwatch: following %s -> %s\n" % (KMSG, self.path))
+        sys.stderr.flush()
+
+        # 首次心跳/快照立刻做一次；同时把时间基准设为"现在"，
+        # 否则 tick() 里的 (now - 0.0) >= HB_SEC 会立刻再打一次，启动瞬间出现重复行
+        now = time.monotonic()
+        self.last_hb = now
+        self.last_snap = now
+        self.heartbeat()
+        self.snapshot()
+
+        while _running:
+            self.pump(kfd)
+            self.tick()
+            time.sleep(POLL_SEC)
+
+        self.write(b"[z17s-logwatch] stopping (signal)\n")
+        self.flush(force=True)
+        for fh in (self.fh, self.snap_fh):
+            try:
+                if fh:
+                    fh.close()
+            except Exception:
+                pass
+        return 0
+
+
+def main():
+    signal.signal(signal.SIGTERM, _on_signal)
+    signal.signal(signal.SIGINT, _on_signal)
+    return LogWatch().run()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
