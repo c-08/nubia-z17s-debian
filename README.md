@@ -128,7 +128,7 @@
 
 ```bash
 # 在手机上（串口或任意终端）执行
-git clone https://github.com/<you>/z17s-debian-ops.git /root/z17s-debian-ops
+git clone https://github.com/c-08/nubia-z17s-debian.git /root/z17s-debian-ops
 cd /root/z17s-debian-ops
 sudo bash scripts/install-on-device.sh
 ```
