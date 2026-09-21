@@ -1,0 +1,141 @@
+# z17s-debian-ops
+
+把一台 **努比亚 Z17S（NX595J / MSM8998）** 变成可长期运行的 Debian 13 小服务器 —— 这里放的是**让它真正能用起来**的那一层：USB 有线网络、容器运行时修复、Web 面板、以及一路踩出来的故障修复方案。
+
+底层移植（内核 + rootfs）来自 [huanhuangyun/z17s-debian](https://github.com/huanhuangyun/z17s-debian)，本仓库不重复造轮子，只补上"跑起来之后"的那部分。
+
+---
+
+## 这台机器现在能干什么
+
+| 能力 | 状态 | 说明 |
+|---|---|---|
+| **USB 有线网络** | ✅ 主力 | 手机通过 USB 变成一块 RNDIS 网卡（`192.168.137.2`），开机自启，PC 侧 ping 延迟 **0ms** |
+| **USB 串口控制台** | ✅ | 同一根线提供 ttyGS0 控制台，root 自动登录；**系统卡死时唯一救命通道** |
+| Docker / 容器 | ✅ | 需内核开启 `CONFIG_CGROUP_BPF`（见下文，原版缺这项） |
+| 1Panel 面板 | ✅ | `http://192.168.137.2:28888/z17s_panel` |
+| 青龙面板 | ✅ | `http://192.168.137.2:5700` |
+| 蓝牙 | ✅ | 设备树硬编码的 NV 与 persist 一致，无需改动 |
+| 音频 | ✅ | `card 0: Nubia-Z17S` 已注册 |
+| Wi-Fi | ⚠️ 不稳定 | 能连上，但**每次开机约 7 分钟后固件崩溃**，详见 [docs/硬件现状.md](docs/硬件现状.md) |
+| 蜂窝（手机卡） | ❌ | `ipa.ko` 会触发 boot loop 已被列入黑名单，本移植设计上就是"仅 Wi-Fi" |
+| 摄像头 / NFC / 指纹 / 传感器 | ❓ | 未验证 |
+| 显示 | ⚠️ | 下半屏重叠（上游已知缺陷） |
+
+**结论：这是一台"USB 连着用"的机器。** 网络走 USB，屏幕当辅助，服务的稳定性不依赖 Wi-Fi。
+
+---
+
+## 为什么需要这个仓库
+
+上游的移植包能让你开机进 Debian，但会撞上四个**不看文档绝对想不到**的坑，每一个都能耗掉你一整天：
+
+1. **容器全都起不来** —— 内核缺 `CONFIG_CGROUP_BPF`，`runc` 报 `bpf_prog_query(BPF_CGROUP_DEVICE) failed: invalid argument`。**任何镜像都起不来**（连 `alpine` 都不行），跟容器配置无关。→ [修复记录 §1](docs/修复记录.md)
+
+2. **开机随机卡死几十分钟** —— `console=ttyGS0` 是 USB 串口，PC 侧没人读时 tty 缓冲写满，systemd PID1 恰好卡在 `write()` 里，**整个开机停摆，连 90 秒超时都不触发**。急救法：打开串口读一下，当场解卡。→ [修复记录 §3](docs/修复记录.md)
+
+3. **USB 网卡每次开机都不受管** —— NetworkManager 上游规则 `85-nm-unmanaged.rules` 对**所有 `DEVTYPE=gadget` 的网卡**置 `NM_UNMANAGED=1`，所以配置写得再对也不会自动激活，DNS 全废。→ [修复记录 §4](docs/修复记录.md)
+
+4. **`g_multi` 永久不可用** —— 本内核树的 `legacy/multi.c` 无条件调用 `can_support_ecm()`，而 `gadget_is_altset_supported()` 恒为 false，报 `failed to start g_multi: -22`。只能用 configfs 手工搭复合 gadget。→ [修复记录 §2](docs/修复记录.md)
+
+---
+
+## 目录结构
+
+```
+.
+├── device/                     要部署到手机上的文件（保留了目标绝对路径）
+│   ├── etc/systemd/system/     z17s-* 服务与定时器
+│   ├── etc/systemd/system.conf.d/10-z17s-quiet.conf      ← 修复"开机卡死"
+│   ├── etc/udev/rules.d/99-z17s-usb0-managed.rules       ← 修复"usb0 不受管"
+│   ├── etc/NetworkManager/system-connections/z17s-usb0.nmconnection
+│   ├── etc/modprobe.d/10-z17s-unsafe-modules.conf        ← 黑名单 ipa.ko
+│   ├── etc/sysctl.d/10-z17s-console.conf                 ← 串口日志降噪
+│   └── usr/local/sbin/         各个 z17s-*.sh 脚本
+├── host/windows/               PC 侧（Windows）辅助脚本
+│   ├── setup-rndis.ps1/.cmd    ICS 透明 NAT 一键配置（自提权）
+│   ├── z17s-proxy.py           ／降级方案：用户态 HTTP+DNS 代理
+│   ├── start-proxy.cmd
+│   ├── env.cmd / env.ps1       终端环境自检（PATH / adb）
+│   └── serial/                 串口控制台工具
+├── scripts/
+│   ├── install-on-device.sh    把 device/ 一键部署到手机
+│   └── backup-system.sh        系统备份（boot + persist + rootfs）
+├── kernel/
+│   ├── README.md               内核重编要点（必改项 + 产物校验）
+│   ├── build-*.sh              上游构建脚本
+│   └── z17s_defconfig.patch    相对上游 defconfig 的改动
+└── docs/
+    ├── 使用说明.md             日常怎么用、怎么连、命令速查
+    ├── 修复记录.md             12 个故障的现象/判据/根因/修法
+    ├── 备份与恢复.md           备份策略与恢复步骤
+    └── 硬件现状.md             WiFi / 蜂窝 / 其它外设的定性与结论
+```
+
+---
+
+## 快速开始
+
+### 前置条件
+
+- 手机已刷入上游的 Debian 13 移植包，能开机、能用串口进系统
+- PC 有 Windows 与一根数据线
+
+### 第 1 步：让 USB 网络起来
+
+```bash
+# 在手机上（串口或任意终端）执行
+git clone https://github.com/<you>/z17s-debian-ops.git /root/z17s-debian-ops
+cd /root/z17s-debian-ops
+sudo bash scripts/install-on-device.sh
+```
+
+脚本会：复制所有配置到正确路径 → 重载 udev / NM → 启用 `z17s-usbnet.timer` → 做一次自检。
+
+### 第 2 步：PC 侧给手机共享网络
+
+双击 `host/windows/setup-rndis.cmd`（会弹 UAC 提权）。它配置 Windows ICS，让手机能出公网。
+
+> ⚠️ **手机每次重启后都要重跑一次** —— Windows 的 ICS 绑定记录会随 USB 重新枚举而消失，症状是「手机能 ping 通 PC，但出不了公网」。这不是手机的问题。
+
+### 第 3 步：登录
+
+```bash
+ssh z17s          # 需要先在 ~/.ssh/config 里配别名，或者：
+ssh -i <你的密钥> root@192.168.137.2
+```
+
+---
+
+## 内核要求
+
+上游默认的 `z17s_defconfig` 有两个必须改的地方，否则会分别导致"容器全崩"和"卡死在 UFS 等待循环"：
+
+| 配置项 | 改成 | 不改的后果 |
+|---|---|---|
+| `CONFIG_CGROUP_BPF` | `=y` | 所有容器起不来（`runc` 报 BPF 错误） |
+| `CONFIG_RPMSG_QCOM_SMD` | `=y` | 它是 `depends on` 的上游，改成 `=m` 会把 UFS 的整套 supplier 驱动压成模块 → **开机卡死在 UFS 等待循环** |
+
+详细步骤与校验方法见 [kernel/README.md](kernel/README.md)。
+
+---
+
+## 已知问题
+
+- **Wi-Fi 会在开机约 7 分钟后崩溃**，且崩溃后只能重启恢复（上游主线内核同样存在，非本移植引入）。详见 [docs/硬件现状.md](docs/硬件现状.md)。
+- **蜂窝不可用**，`ipa.ko` 已进黑名单 —— 加载它会 boot loop。
+- **关机很慢**（实测十几分钟），且关机中期会出现"能 ping 通但所有 TCP 端口连不上"，别误判为死机。
+
+---
+
+## 致谢与许可
+
+- 底层移植：[huanhuangyun/z17s-debian](https://github.com/huanhuangyun/z17s-debian)
+- 本仓库新增的修复与脚本：MIT（见 [LICENSE](LICENSE)）
+- `device/etc/NetworkManager/system-connections/*.nmconnection` 中的 Wi-Fi 连接文件**已从仓库排除**（含 WPA 密钥），请自行创建。
+
+---
+
+## 免责声明
+
+本仓库涉及**直接写入手机分区**的操作。刷机有变砖风险，请务必备份（见 [docs/备份与恢复.md](docs/备份与恢复.md)）后再动手。作者不对任何数据丢失或设备损坏负责。

@@ -1,0 +1,12 @@
+[Unit]
+Description=Bring up the Z17S USB RNDIS gadget 45s after boot
+Documentation=file:/usr/local/sbin/z17s-usbnet.sh
+
+[Timer]
+OnBootSec=45
+AccuracySec=1s
+Unit=z17s-usbnet.service
+Persistent=false
+
+[Install]
+WantedBy=timers.target

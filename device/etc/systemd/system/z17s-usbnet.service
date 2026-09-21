@@ -1,0 +1,17 @@
+[Unit]
+Description=Z17S USB composite gadget (RNDIS usb0 + serial console ttyGS0) -- timer driven
+Documentation=file:/usr/local/sbin/z17s-usbnet.sh
+# Deliberately NOT part of the boot critical path: v2 was WantedBy=multi-user.target and
+# hung the boot at "Starting z17s-early.service".  This unit is started by
+# z17s-usbnet.timer after multi-user.target is already up, so it can never block boot.
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/z17s-usbnet.sh
+RemainAfterExit=yes
+TimeoutStartSec=150
+StandardOutput=journal
+
+# No [Install] on purpose -- do NOT `systemctl enable` this.
+# Enable z17s-usbnet.timer instead.

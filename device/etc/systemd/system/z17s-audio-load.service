@@ -1,0 +1,15 @@
+[Unit]
+Description=Z17S ADSP, QDSP6 and audio card setup
+After=z17s-early.service systemd-udev-trigger.service
+Before=z17s-wifi-load.service
+Wants=z17s-early.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/z17s-audio-load.sh
+RemainAfterExit=yes
+TimeoutStartSec=90
+
+[Install]
+WantedBy=multi-user.target
+

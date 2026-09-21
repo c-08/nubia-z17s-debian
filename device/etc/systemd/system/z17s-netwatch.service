@@ -1,0 +1,8 @@
+[Unit]
+Description=Z17S network watchdog (fail over between WiFi and USB RNDIS)
+After=network-online.target z17s-usbnet.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/z17s-netwatch.sh

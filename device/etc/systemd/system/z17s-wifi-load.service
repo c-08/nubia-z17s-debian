@@ -1,0 +1,14 @@
+[Unit]
+Description=Z17S WCN3990 firmware and wlan0 setup
+After=z17s-early.service z17s-audio-load.service dbus.service systemd-udevd.service
+Before=NetworkManager.service
+Wants=z17s-early.service dbus.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/z17s-wifi-load.sh
+RemainAfterExit=yes
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

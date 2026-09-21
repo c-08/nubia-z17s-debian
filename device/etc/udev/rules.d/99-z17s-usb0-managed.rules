@@ -1,0 +1,5 @@
+# Z17S: NetworkManager ships /usr/lib/udev/rules.d/85-nm-unmanaged.rules which
+# sets NM_UNMANAGED=1 for every netdev with DEVTYPE=gadget (USB gadget NICs).
+# usb0 (configfs RNDIS) is this device's primary link, so clear the flag here.
+# Files are merged and applied in filename order, so 99-* runs after 85-*.
+ACTION=="add|change", SUBSYSTEM=="net", ENV{INTERFACE}=="usb0", ENV{NM_UNMANAGED}="0"

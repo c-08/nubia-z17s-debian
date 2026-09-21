@@ -1,0 +1,13 @@
+[Unit]
+Description=Z17S early serial and partition setup
+DefaultDependencies=no
+After=systemd-udevd.service local-fs.target
+Before=dbus.service z17s-wifi-load.service serial-getty@ttyGS0.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/z17s-early-setup.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

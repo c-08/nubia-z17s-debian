@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Z17S network watchdog every 30s
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=30
+AccuracySec=5
+Unit=z17s-netwatch.service
+
+[Install]
+WantedBy=timers.target

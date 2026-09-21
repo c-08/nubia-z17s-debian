@@ -1,0 +1,13 @@
+[Unit]
+Description=Grow the Z17S root filesystem to its partition
+After=systemd-remount-fs.service local-fs.target
+Before=z17s-early.service NetworkManager.service docker.service
+ConditionPathIsExecutable=/usr/sbin/resize2fs
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/z17s-grow-rootfs.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

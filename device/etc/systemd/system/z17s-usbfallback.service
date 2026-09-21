@@ -1,0 +1,13 @@
+[Unit]
+Description=Z17S USB gadget fallback (serial console + RNDIS network)
+After=multi-user.target
+Wants=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/z17s-usbfallback.sh
+TimeoutStartSec=90
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
