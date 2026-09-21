@@ -11,6 +11,10 @@
 #
 #  用法：
 #    ./pull-chunks.sh                          # profile=core（配置类，最小、最重要）
+#    ./pull-chunks.sh --profile fw             # 只拉 /usr/lib/firmware（110 MB）
+#                                              #   —— 内容与 WiFi 无关：GPU 47KB / ADSP 57MB /
+#                                              #      功放 23KB / 蓝牙 188KB，121/125 个文件
+#                                              #      是手工放的原厂 ROM 提取物，apt 装不回来
 #    ./pull-chunks.sh --profile data           # + 固件 / var 状态 / home / 内核模块
 #    ./pull-chunks.sh --profile full           # + 整个 usr + docker（最大，风险最高）
 #    ./pull-chunks.sh --chunks 10,20,30        # 只拉指定块
@@ -93,9 +97,10 @@ CHUNK_DEFS=(
 
 case "$PROFILE" in
     core) WANT="10 20 30 40" ;;
+    fw|firmware) WANT="50" ;;
     data) WANT="10 20 30 40 50 55 60 65" ;;
     full) WANT="10 20 30 40 50 55 60 65 70 80 90" ;;
-    *)    echo "✗ 未知 profile: $PROFILE（可选 core / data / full）" >&2; exit 2 ;;
+    *)    echo "✗ 未知 profile: $PROFILE（可选 core / fw / data / full）" >&2; exit 2 ;;
 esac
 [ -n "$CHUNKS_SEL" ] && WANT="$(echo "$CHUNKS_SEL" | tr ',' ' ')"
 
