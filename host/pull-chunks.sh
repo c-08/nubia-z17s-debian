@@ -53,6 +53,14 @@ done
 HERE="$(cd "$(dirname "$0")" && pwd)"
 THROTTLE="$HERE/net-throttle.py"
 
+# ⚠️ Git Bash(MSYS) 下 pwd 得到的是 /c/Users/... 形式，而 Python 很可能是
+#    Windows 原生 exe —— 它不认 MSYS 路径，会把 /c/... 当成"当前盘下的 c\..."
+#    实测报错：can't open file 'C:\c\Users\<用户名>\...\host\net-throttle.py'
+#    有 cygpath 就转成 Windows 形式；Linux 上没有 cygpath，保持原样。
+if command -v cygpath >/dev/null 2>&1; then
+    THROTTLE="$(cygpath -w "$THROTTLE")"
+fi
+
 # ---------- 找一个能用的 python（限速器要用） --------------------------------
 if [ -z "$PYTHON" ]; then
     for c in python3 python; do
@@ -92,6 +100,25 @@ esac
 [ -n "$CHUNKS_SEL" ] && WANT="$(echo "$CHUNKS_SEL" | tr ',' ' ')"
 
 # ---------- 输出目录 ---------------------------------------------------------
+# ⚠️ Git Bash 的 GNU tar/gzip 只认 MSYS 形式 /c/Users/...；传 Windows 形式
+#    C:/Users/... 时 tar 会返回 2（file not found），配合 set -e 那就是**静默退出**
+#    （无输出、无报错，看起来像"卡住了"）。实测 tar 1.35：
+#        tar tzf "C:/Users/...x.tar.gz"  → rc=2
+#        tar tzf "/c/Users/...x.tar.gz"  → rc=0
+#    所以这里统一规范化成 MSYS 形式，最后再转回 Windows 形式给用户看。
+if command -v cygpath >/dev/null 2>&1; then
+    OUTROOT="$(cygpath -u "$OUTROOT" 2>/dev/null || echo "$OUTROOT")"
+fi
+
+# 给用户展示时用回 Windows 路径（Linux 上没 cygpath，原样输出）
+show_path() {
+    if command -v cygpath >/dev/null 2>&1; then
+        cygpath -w "$1" 2>/dev/null || echo "$1"
+    else
+        echo "$1"
+    fi
+}
+
 STAMP="$(date +%Y%m%d-%H%M%S)"
 DEST="$OUTROOT/$STAMP"
 mkdir -p "$DEST"
@@ -105,7 +132,7 @@ fi
 
 echo "======================================================================"
 echo " 分块拉取   profile=$PROFILE   限速=$RATE   块=$WANT"
-echo " 输出: $DEST"
+echo " 输出: $(show_path "$DEST")"
 echo "======================================================================"
 
 # ---------- 前置探测 ---------------------------------------------------------
@@ -184,7 +211,10 @@ nice -n 19 \$IONICE tar -C / $EXCL_ARGS -cf - $PATHS"
         break
     fi
     SZ=$(stat -c %s "$ARCHIVE" 2>/dev/null || echo 0)
-    CNT=$(tar tzf "$ARCHIVE" 2>/dev/null | wc -l)
+    # ⚠️ 统计必须兜底：set -e + pipefail 下任何一步返回非零都会让脚本**静默退出**
+    #    （无输出、无报错）。tar 在归档含 socket、或路径形式不对时都会返回非零 ——
+    #    pull-rootfs.sh 已经栽过一次同类跟头。
+    CNT=$( { tar tzf "$ARCHIVE" 2>/dev/null || true; } | wc -l ) || CNT="?"
     echo "       ✓ ${SZ} 字节 / ${CNT} 个成员 / $((T1-T0))s"
     OK_LIST+=("$NAME")
     TOTAL_BYTES=$((TOTAL_BYTES + SZ))
@@ -206,7 +236,7 @@ done
         [ -n "$n" ] || continue
         f="$DEST/$n.tar.gz"
         if [ -f "$f" ]; then
-            echo "- \`$n.tar.gz\` — $(stat -c %s "$f" 2>/dev/null) 字节"
+            echo "- \`$n.tar.gz\` — $(stat -c %s "$f" 2>/dev/null || echo '?') 字节"
         fi
     done
     if [ "${#FAIL_LIST[@]}" -gt 0 ]; then
@@ -239,6 +269,6 @@ done
 echo
 echo "======================================================================"
 echo " 完成: 成功 ${#OK_LIST[@]} 块 / 失败 ${#FAIL_LIST[@]} 块，共 $((TOTAL_BYTES/1048576)) MiB"
-echo " 产物: $DEST"
+echo " 产物: $(show_path "$DEST")"
 [ "${#FAIL_LIST[@]}" -gt 0 ] && exit 1
 exit 0
