@@ -223,6 +223,77 @@ class LogWatch(object):
             pass
 
     # ------------------------------------------------------------------ 心跳
+    HB_CHILD_TIMEOUT = 2.0       # 子进程写串口最多等这么久，绝不拖住主循环
+
+    @staticmethod
+    def _gadget_ready():
+        """gadget 有没有被 bind 上。
+
+        2026-09-21 实测：开机 +45s 时 `z17s-usbnet.sh` 会**拆掉并重建**整个 gadget，
+        ttyGS0 节点在这一瞬间被销毁重建。此刻往里写 → 内核 tty 层 oops 落到本进程 →
+        `z17s-logwatch` 被 SIGSEGV 打死（`status=11/SEGV`，整次开机唯一一条 gs_close 就是它
+        的 fd 关掉造成的）。所以写之前先看一眼 gadget 状态，撕设备的窗口里干脆不写。
+        读不到 configfs 就当"没有这个机制"，不拦（兼容旧的 g_serial 模式）。
+        """
+        try:
+            base = "/sys/kernel/config/usb_gadget"
+            names = os.listdir(base)
+        except OSError:
+            return True
+        try:
+            for name in names:
+                try:
+                    with open(os.path.join(base, name, "UDC")) as fh:
+                        if fh.read().strip():
+                            return True
+                except OSError:
+                    continue
+            return False
+        except Exception:
+            return True
+
+    def _write_isolated(self, fd, data):
+        """把真正的 write 丢进子进程：崩了只崩子进程，主进程（日志跟随）活着。
+
+        Python 捕不到内核送来的 SIGSEGV，所以唯一可靠的办法是把 syscall 隔离出去。
+        返回 True 表示写成功；False 表示失败/被信号打死（调用方应丢弃这个 fd）。
+        """
+        try:
+            pid = os.fork()
+        except OSError as e:
+            sys.stderr.write("z17s-logwatch: serial hb fork failed: %s\n" % e)
+            return False
+        if pid == 0:                                   # ---- 子进程 ----
+            try:
+                os.write(fd, data)
+                os._exit(0)
+            except BaseException:
+                os._exit(1)
+        deadline = time.monotonic() + self.HB_CHILD_TIMEOUT
+        while time.monotonic() < deadline:             # ---- 父进程 ----
+            try:
+                wpid, status = os.waitpid(pid, os.WNOHANG)
+            except ChildProcessError:
+                return False
+            if wpid:
+                if os.WIFSIGNALED(status):
+                    sys.stderr.write("z17s-logwatch: serial hb killed by signal %d"
+                                     " (gadget 撕设备？已丢弃 fd，下次重开)\n" % os.WTERMSIG(status))
+                    return False
+                return os.WEXITSTATUS(status) == 0
+            time.sleep(0.05)
+        # 超时：子进程卡在 write 里，杀掉，fd 视为已废（避免复用半死的 fd）
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+        try:
+            os.waitpid(pid, 0)
+        except OSError:
+            pass
+        sys.stderr.write("z17s-logwatch: serial hb write timed out, fd dropped\n")
+        return False
+
     def serial_write(self, text):
         """直写 USB gadget 串口。
 
@@ -231,9 +302,13 @@ class LogWatch(object):
         非阻塞下写不进去就返回 EAGAIN，我们直接丢弃 —— 心跳丢了无所谓，卡住进程不行。
         """
         data = text.encode("utf-8", "replace")
-        for attempt in (0, 1):          # 第二次机会：USB 重连后节点会重建，重开一次
+        if not self._gadget_ready():
+            return                       # 正在拆/建 gadget，这一拍跳过
+        for attempt in (0, 1):           # 第二次机会：USB 重连后节点会重建，重开一次
             if self.ser_fd is None:
                 try:
+                    if not os.path.exists(HB_TTY):
+                        return
                     self.ser_fd = os.open(HB_TTY, os.O_WRONLY | os.O_NONBLOCK | os.O_NOCTTY)
                     self._tty_raw(self.ser_fd)
                 except OSError as e:
@@ -241,17 +316,15 @@ class LogWatch(object):
                     if attempt:
                         sys.stderr.write("z17s-logwatch: serial hb open failed: %s\n" % e)
                     return
-            try:
-                os.write(self.ser_fd, data)
+            if self._write_isolated(self.ser_fd, data):
                 return
-            except OSError as e:
-                try:
-                    os.close(self.ser_fd)
-                except OSError:
-                    pass
-                self.ser_fd = None
-                if attempt:
-                    sys.stderr.write("z17s-logwatch: serial hb write failed: %s\n" % e)
+            try:
+                os.close(self.ser_fd)
+            except OSError:
+                pass
+            self.ser_fd = None
+            if not self._gadget_ready():
+                return
 
     @staticmethod
     def _tty_raw(fd):

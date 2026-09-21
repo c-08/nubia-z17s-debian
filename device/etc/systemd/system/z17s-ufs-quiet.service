@@ -1,0 +1,23 @@
+# Z17S —— 抑制 UFS 运行时电源/调频抖动，缓解高 IO 触发的 RCU stall
+#
+# 为什么是 oneshot 而不是 timer：
+#   三个开关都是一次性的 sysfs 写入，内核不会再自己改回来，
+#   所以开机后写一次常驻即可（RemainAfterExit 让它在 systemctl 里显示 active）。
+#
+# 为什么不挂启动关键路径：
+#   只 WantedBy=multi-user.target，不做 Before=，脚本本身毫秒级完成，
+#   不会像 §5 的 z17s-usbnet.service 那样把整个开机拖死。
+#
+# 细节与回滚：docs/修复记录.md §17.6
+#   systemctl disable --now z17s-ufs-quiet.service
+[Unit]
+Description=Z17S - suppress UFS runtime-PM and clock-scaling jitter (RCU stall mitigation)
+Documentation=file:///usr/local/sbin/z17s-ufs-quiet.sh
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/z17s-ufs-quiet.sh
+
+[Install]
+WantedBy=multi-user.target

@@ -68,6 +68,11 @@ systemctl enable --now z17s-usbnet.timer 2>/dev/null \
     && echo "  z17s-usbnet.timer 已启用" \
     || echo "  ⚠ z17s-usbnet.timer 启用失败，请手工检查"
 
+# UFS 抖动抑制（oneshot，毫秒级，不进关键路径）—— 缓解高 IO 触发的 RCU stall
+systemctl enable --now z17s-ufs-quiet.service 2>/dev/null \
+    && echo "  z17s-ufs-quiet.service 已启用（UFS runtime PM / 时钟缩放 / auto-hibern8 关闭）" \
+    || echo "  ⚠ z17s-ufs-quiet.service 启用失败，请手工检查"
+
 # 明确关闭那些已废弃的单元（历史遗留，会干扰）
 for u in z17s-netwatch.timer z17s-usbfallback.service z17s-wifi-watchdog.service; do
     if systemctl list-unit-files 2>/dev/null | grep -q "^$u"; then
@@ -116,6 +121,14 @@ else
     echo "  （无 /proc/config.gz，跳过）"
 fi
 
+echo "--- UFS 抖动抑制（RCU stall 缓解）---"
+echo "  ufs-quiet     : $(systemctl is-active z17s-ufs-quiet.service 2>&1) / $(systemctl is-enabled z17s-ufs-quiet.service 2>&1)"
+_ufs=/sys/bus/platform/devices/1da4000.ufshc
+printf '  power/control : %s（期望 on）\n' "$(cat $_ufs/power/control 2>/dev/null || echo n/a)"
+for f in /sys/class/scsi_host/host*/clkscale_enable; do
+    [ -e "$f" ] && printf '  clkscale      : %s = %s（期望 0）\n' "$(basename "$(dirname "$f")")" "$(cat "$f" 2>/dev/null)"
+done
+
 echo "--- 容器运行时 ---"
 if command -v docker >/dev/null 2>&1; then
     printf '  docker        : %s\n' "$(docker --version 2>&1)"
@@ -129,4 +142,8 @@ echo "完成。"
 echo
 echo "下一步（在 PC 上）："
 echo "  双击 host/windows/setup-rndis.cmd 给设备共享网络"
-echo "  ⚠ 设备每次重启后都要重跑一次"
+echo "  ⚠ 这是**每台主机只配一次**的事，不用跟着设备重启重跑"
+echo "    （生效的是持久存储的 192.168.137.1 + WinNAT 实例 z17s-usb；判据：Get-NetNat 里有 z17s-usb）"
+echo
+echo "诊断设备死活时别只看 ssh（见 docs/修复记录.md §17）："
+echo "  ping 通 + 端口通 + HTTP 200，但 ssh 卡在 channel open  → 半死态（PID1 卡住），只能长按电源 15 秒"
