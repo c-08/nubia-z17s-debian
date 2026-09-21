@@ -52,22 +52,27 @@
 │   ├── etc/modprobe.d/10-z17s-unsafe-modules.conf        ← 黑名单 ipa.ko
 │   ├── etc/sysctl.d/10-z17s-console.conf                 ← 串口日志降噪
 │   └── usr/local/sbin/         各个 z17s-*.sh 脚本
-├── host/windows/               PC 侧（Windows）辅助脚本
-│   ├── setup-rndis.ps1/.cmd    ICS 透明 NAT 一键配置（自提权）
-│   ├── z17s-proxy.py           ／降级方案：用户态 HTTP+DNS 代理
-│   ├── start-proxy.cmd
-│   ├── env.cmd / env.ps1       终端环境自检（PATH / adb）
-│   └── serial/                 串口控制台工具
+├── host/                       PC（宿主机）侧脚本
+│   ├── pull-rootfs.sh          ⭐ 从 PC 侧流式拉取根分区备份（**勿在设备上就地打包**）
+│   └── windows/
+│       ├── setup-rndis.ps1/.cmd    ICS 透明 NAT 一键配置（自提权）
+│       ├── z17s-proxy.py           ／降级方案：用户态 HTTP+DNS 代理
+│       ├── start-proxy.cmd
+│       ├── pull-backup.cmd         拉取 T1 关键分区备份
+│       ├── pull-rootfs.cmd         拉取 T2 根分区（双击版，自动找 Git Bash）
+│       ├── env.cmd / env.ps1       终端环境自检（PATH / adb）
+│       └── serial/                 串口控制台工具
 ├── scripts/
 │   ├── install-on-device.sh    把 device/ 一键部署到手机
-│   └── backup-system.sh        系统备份（boot + persist + rootfs）
+│   ├── backup-system.sh        设备侧备份 T1（boot + persist + 配置 + 包列表，20 秒）
+│   └── flash-boot-cgroupbpf.sh 安全刷 boot 分区（备份 → 写入 → 回读校验 → 装模块）
 ├── kernel/
 │   ├── README.md               内核重编要点（必改项 + 产物校验）
 │   ├── build-*.sh              上游构建脚本
-│   └── z17s_defconfig.patch    相对上游 defconfig 的改动
+│   └── config-6.12.95-running.txt   设备实跑内核的完整 .config（改动实证）
 └── docs/
     ├── 使用说明.md             日常怎么用、怎么连、命令速查
-    ├── 修复记录.md             12 个故障的现象/判据/根因/修法
+    ├── 修复记录.md             13 个故障的现象/判据/根因/修法 + 诊断方法论
     ├── 备份与恢复.md           备份策略与恢复步骤
     └── 硬件现状.md             WiFi / 蜂窝 / 其它外设的定性与结论
 ```
