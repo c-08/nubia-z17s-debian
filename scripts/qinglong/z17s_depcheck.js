@@ -177,23 +177,45 @@ attempt('nodejs', 'node-fetch', () => {
 });
 
 console.log('');
-console.log('--- 2. 已知不可用的依赖（面板标"已安装"但实际 require 就炸）---');
+console.log('--- 2. 曾经的坏依赖（09-22 已换成可用版，这里真调用一次防退化）---');
 
-attempt('broken', 'ts-md5', () => {
-  const m5 = require('ts-md5');
-  return '意外可用：' + m5.Md5.hashStr('hello');
+// 背景（都写在这，免得以后又忘）：
+//   ts-md5@2.0.1 是发布事故 —— package.json 的 exports.require 指向
+//     dist/index.cjs.js，可包又声明了 "type":"module"，而 .js 结尾在
+//     "type":"module" 下一律按 ESM 解析 → CJS 代码报
+//     "exports is not defined in ES module scope"。降到 1.3.1（纯 CJS）即好。
+//   jsdom@30 要求 Node ≥ 22，容器是 20.20.2 → 降到 26.1.0（engines: >=18）。
+//   npm 上的 jieba@1.0.0 是坏包：main 指向 index.js，但发布的 tarball 里
+//     根本没这个文件。已用 /ql/data/scripts/node_modules/jieba 这个壳
+//     转发到 @node-rs/jieba（linux-arm64-gnu 预编译，手机上无需编译），
+//     所以老写法 require('jieba') 照旧可用。
+attempt('fixed', 'ts-md5', () => {
+  const { Md5 } = require('ts-md5');
+  const got = Md5.hashStr('hello');
+  if (got !== '5d41402abc4b2a76b9719d911017c592') throw new Error('md5 结果不对: ' + got);
+  return `Md5.hashStr(hello)=${got}  v${require('ts-md5/package.json').version}`;
 });
 
-attempt('broken', 'jsdom', () => {
+attempt('fixed', 'jsdom', () => {
   const { JSDOM } = require('jsdom');
-  const d = new JSDOM('<title>t</title>');
-  return '意外可用：' + d.window.document.title;
+  const d = new JSDOM('<title>t</title><p id=x>中文</p>');
+  const txt = d.window.document.querySelector('#x').textContent;
+  if (txt !== '中文') throw new Error('DOM 文本不对: ' + txt);
+  return `JSDOM 解析 OK <p>=${txt}  v${require('jsdom/package.json').version}`;
 });
 
-attempt('broken', 'jieba', () => {
+attempt('fixed', 'jieba', () => {
   const jb = require('jieba');
-  return '意外可用：' + typeof jb;
+  const words = jb.cut('我们中出了一个叛徒', true);
+  if (!Array.isArray(words) || !words.length) throw new Error('cut() 没返回数组');
+  const tags = jb.tag('我爱北京天安门');
+  if (!Array.isArray(tags) || !tags.length) throw new Error('tag() 没返回数组');
+  return `cut=${JSON.stringify(words)} tag=${tags.length} v${require('jieba/package.json').version}`;
 });
+// 把"到底解析到哪个文件"打出来 —— 哪天它悄悄退回那个坏包，一眼就能看见
+try {
+  console.log(`        (jieba 实际解析到 ${require.resolve('jieba')})`);
+} catch (e) { /* 上面 attempt 已经报过了 */ }
 
 console.log('');
 console.log('--- 3. Linux 依赖（g++ 真编译 + make 真构建）---');
@@ -397,11 +419,10 @@ attempt('host', '中文字体', () => {
 
   const pass = results.filter(r => r.ok).length;
   const fail = results.filter(r => !r.ok).length;
-  const broken = results.filter(r => r.kind === 'broken' && !r.ok).length;
 
   console.log('');
   console.log('='.repeat(78));
-  console.log(`合计 ${results.length} 项：PASS ${pass}  /  FAIL ${fail}（其中 ${broken} 项为已知坏依赖）`);
+  console.log(`合计 ${results.length} 项：PASS ${pass}  /  FAIL ${fail}`);
   console.log(`耗时 ${((Date.now() - T0) / 1000).toFixed(1)}s`);
   if (pngPath) console.log(`示意图：${pngPath}`);
   console.log('='.repeat(78));
@@ -417,5 +438,5 @@ attempt('host', '中文字体', () => {
   ].join('\n');
   fs.writeFileSync(`${SCRIPT_DIR}/z17s-depcheck-report.txt`, report + '\n');
 
-  process.exit(fail - broken > 0 ? 1 : 0);
+  process.exit(fail > 0 ? 1 : 0);
 })();

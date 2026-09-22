@@ -1,0 +1,10 @@
+{
+  "name": "jieba",
+  "version": "1.10.4-z17s.1",
+  "private": true,
+  "description": "z17s shim: npm 上的 jieba@1.0.0 是坏包（main 指向不存在的 index.js），这里转发到可用的 @node-rs/jieba，保持 require('jieba') 可用",
+  "main": "index.js",
+  "dependencies": {
+    "@node-rs/jieba": "^1.10.4"
+  }
+}
