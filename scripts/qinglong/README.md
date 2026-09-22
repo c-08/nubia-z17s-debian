@@ -23,6 +23,23 @@ node z17s_depcheck.js          # 或者：task z17s_depcheck.py
 
 想定时（每天 09:30）：cron 填 `0 30 9 * * *`。
 
+## 复跑结果（2026-09-22 21:35，轻量冒烟版 `z17s_smoke.js`）
+
+上面报告里 FAIL 的 5 条中，有 2 条是"我们自己的锅"，改完一直没机会复跑（一跑重 IO 就卡死）。
+2026-09-22 改用**零编译、不出网**的 `z17s_smoke.js` 复验，全绿：
+
+```
+[PASS] prettytable      create(fields, rows) 渲染 7 行
+[PASS] 中文字体             1 个：wqy-microhei.ttc
+[PASS] canvas 出图        320x96 PNG=7636B 非白像素=6.16% font=Z17S-CJK
+合计 3 项：PASS 3 / FAIL 0   耗时 1.06s   跑前 load=0.40 → 跑后 load=0.45
+```
+
+剩下 3 条 FAIL（`ts-md5` / `jsdom@30` / `jieba`）是依赖本身的坑，见上文，不用管。
+
+> `z17s_smoke.js` 就是为"设备经不起重 IO"这个约束写的：3 个 `require` + 一次 320×96 画布，
+> 1 秒级完成。**平时验证环境用这个**，`z17s_depcheck.js` 只在需要完整清单（会真跑 `g++`）时用。
+
 ## 想不开浏览器手动跑
 
 用**和面板完全相同**的链路：

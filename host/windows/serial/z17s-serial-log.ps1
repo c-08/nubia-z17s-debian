@@ -38,7 +38,9 @@ param(
   [int]    $KeepFiles    = 40,
   [int]    $PollMs       = 150,
   [int]    $ReopenDelayS = 6,
-  [int]    $StallWarnSec = 90
+  [int]    $StallWarnSec = 90,
+  [int]    $EarlyFallbackSec = 180,
+  [switch] $WatchEarlyConsole
 )
 
 $ErrorActionPreference = 'Continue'
@@ -74,10 +76,38 @@ function Write-Host-Line {
 # because the console only needs a reader while the device is actually there.
 #
 # Gadget PIDs seen on this phone:
-#   A4A7 - early/legacy gadget that carries the boot console (appears ~10s in)
+#   A4A7 - early/legacy gadget that carries the boot console (appears ~10s in).
+#          Built by `modprobe g_serial` in z17s-early.service: **serial only,
+#          no RNDIS**, so the host's COM handle is the ONLY thing the PC side
+#          can hold on it.
 #   A4A2 - our configfs composite (RNDIS + ACM), built at boot+45s by
-#          z17s-usbnet.sh. Preference order puts this one first.
+#          z17s-usbnet.sh.
+#
+# (3) 2026-09-22 -- WHY WE NO LONGER HOLD A4A7 BY DEFAULT.
+#     At boot+45s z17s-usbnet.sh runs `modprobe -r g_serial` and rebuilds the
+#     whole gadget. If a host holds the old ACM port open at that instant,
+#     gs_close() waits for the port (u_serial.c:691) and the unbind wedges --
+#     ttyGS0 is destroyed while the kernel console still points at it, so
+#     PID1's write to /dev/console blocks forever: the "half-dead" state of
+#     docs/修复记录.md §17, recoverable only by a 15s power-button hold.
+#     A/B test the same night: boot with the cable unplugged (nobody holds the
+#     port) -> the +49s rebuild went through cleanly, gs_close WARN count 0,
+#     RCU stall count 0, device fully healthy. Conclusion: the PC-side holder
+#     is the necessary ingredient.
+#     Therefore the logger now only ever opens A4A2 (the FINAL composite, built
+#     after the rebuild, so holding it is harmless). It deliberately skips
+#     A4A7 and waits instead. Cost: the 0..45s window is not captured live --
+#     but nothing is lost, because the kernel console is registered with
+#     CON_PRINTBUFFER, so the early log is replayed as soon as somebody drains
+#     the port after the rebuild (observed 2026-09-22: messages from uptime
+#     20..26s arrived at uptime 127s on the new gadget).
+#     Use -WatchEarlyConsole to opt back in when you accept the risk (e.g. you
+#     are debugging kernel init and have unplugged the RNDIS side by hand).
 function Get-PhonePortInfo {
+  param([switch]$IncludeEarly)
+  # -WatchEarlyConsole (script scope) opts the whole logger back in; keep call
+  # sites unchanged so the policy can never be missed at one of them.
+  $wantEarly = $IncludeEarly -or [bool]$script:WatchEarlyConsole
   $found = New-Object System.Collections.Generic.List[object]
   $devs = $null
   try { $devs = @(Get-PnpDevice -Class Ports -Status OK -ErrorAction Stop) } catch { return $found }
@@ -88,6 +118,10 @@ function Get-PhonePortInfo {
     if (-not $com) { continue }
     $pid4 = ''
     if ($d.InstanceId -match 'PID_([0-9A-Fa-f]{4})') { $pid4 = $Matches[1].ToUpper() }
+    if ($pid4 -ne 'A4A2' -and -not $wantEarly) {
+      Write-Host-Line "[logger] SKIP $com (PID $pid4): early boot console, holding it can wedge the device at boot+45s"
+      continue
+    }
     # composite gadget: the ACM node is "...\PID_A4A2&MI_02\<hub node>"
     $mi = ''
     if ($d.InstanceId -match '&MI_(\d+)') { $mi = $Matches[1] }
@@ -183,6 +217,9 @@ function Get-PortInfoOf {
 # ---------------------------------------------------------------- 主流程
 $candidates = if ($PortName -eq 'auto') { Get-CandidatePorts } else { @($PortName) }
 $info0 = @(Get-PhonePortInfo)
+Write-Host-Line ("[logger] policy: " + $(if ($WatchEarlyConsole) {
+    'WATCH-EARLY-CONSOLE (A4A7 allowed) - accept the boot+45s wedge risk' }
+  else { 'final composite only (PID A4A2); A4A7 is skipped on purpose' }))
 Write-Host-Line ("[logger] gadget ports present: " + $(if ($info0.Count -gt 0) {
     (($info0 | ForEach-Object { "$($_.Com)(PID $($_.Pid))" }) -join ', ') } else { '(none)' }))
 
@@ -190,11 +227,23 @@ Write-Host-Line ("[logger] gadget ports present: " + $(if ($info0.Count -gt 0) {
 # device console, and an unread console can block PID1's write() forever ->
 # the boot hangs hard and silently (see docs/修复记录.md §7.1). Waiting is safe.
 $open = @{ Ok = $false; Port = $null; Name = $null }
+$waitStart = Get-Date
 while (-not $open.Ok) {
   $open = Open-SerialPort -Candidates $candidates
   if (-not $open.Ok) {
     Write-Host-Line "[logger] no device port yet - plug in the Z17S USB cable, waiting ${ReopenDelayS}s..."
     Start-Sleep -Seconds $ReopenDelayS
+    if (-not $WatchEarlyConsole -and
+        ((Get-Date) - $waitStart).TotalSeconds -ge $EarlyFallbackSec) {
+      # The composite never came up at all -> the device is most likely sitting
+      # in the g_serial rollback state (z17s-usbnet.sh failed to build A4A2).
+      # In that state A4A7 *is* the final console and no further teardown will
+      # happen, so waiting forever would just leave us blind. Take it, loudly.
+      $script:WatchEarlyConsole = $true
+      Write-Host-Line ("[logger] WARN no A4A2 after ${EarlyFallbackSec}s - falling back to the early " +
+        "console (A4A7). The composite gadget probably failed to build; check " +
+        "/var/log/z17s-usbnet.log on the device.")
+    }
     if ($PortName -eq 'auto') { $candidates = Get-CandidatePorts }
   }
 }
