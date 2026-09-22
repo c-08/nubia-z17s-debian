@@ -58,46 +58,61 @@ function Write-Host-Line {
 }
 
 # ---------------------------------------------------------------- 串口探测
+# Only ever open a port that is BOTH present (PnP Status = OK) and belongs to a
+# Linux USB gadget (VID_0525). Two real accidents drove this rewrite:
+#
+#   (1) After the device re-enumerated, the on-board COM1 (ACPI\PNP0501) was
+#       still openable, so the logger latched onto COM1 and reported
+#       "state=idle" forever -- it *looked* like it was recording.
+#   (2) 2026-09-22 21:07: the device rebuilds its gadget at boot+45s, so the
+#       old COM number becomes a phantom entry with Status=Unknown. The logger
+#       opened that phantom (COM11) anyway, read one block, then looped on
+#       "still no port". Meanwhile nobody drained the real console.
+#
+# Therefore: no SERIALCOMM registry scan, no guessed COM list. Present +
+# VID_0525 only. If nothing matches we wait -- which is the correct behaviour,
+# because the console only needs a reader while the device is actually there.
+#
+# Gadget PIDs seen on this phone:
+#   A4A7 - early/legacy gadget that carries the boot console (appears ~10s in)
+#   A4A2 - our configfs composite (RNDIS + ACM), built at boot+45s by
+#          z17s-usbnet.sh. Preference order puts this one first.
+function Get-PhonePortInfo {
+  $found = New-Object System.Collections.Generic.List[object]
+  $devs = $null
+  try { $devs = @(Get-PnpDevice -Class Ports -Status OK -ErrorAction Stop) } catch { return $found }
+  foreach ($d in $devs) {
+    if ($d.InstanceId -notlike 'USB\VID_0525&PID_*') { continue }
+    $com = $null
+    if ($d.FriendlyName -match '\((COM\d+)\)') { $com = $Matches[1] }
+    if (-not $com) { continue }
+    $pid4 = ''
+    if ($d.InstanceId -match 'PID_([0-9A-Fa-f]{4})') { $pid4 = $Matches[1].ToUpper() }
+    # composite gadget: the ACM node is "...\PID_A4A2&MI_02\<hub node>"
+    $mi = ''
+    if ($d.InstanceId -match '&MI_(\d+)') { $mi = $Matches[1] }
+    $node = ''
+    $ix = $d.InstanceId.LastIndexOf('\')
+    if ($ix -ge 0 -and $ix -lt ($d.InstanceId.Length - 1)) { $node = $d.InstanceId.Substring($ix + 1) }
+    $found.Add([pscustomobject]@{ Com = $com; InstanceId = $d.InstanceId; Pid = $pid4; Mi = $mi; Node = $node })
+  }
+  # A4A2 (the final RNDIS+ACM composite) is the one we want to hold.
+  return @($found | Sort-Object @{ Expression = { if ($_.Pid -eq 'A4A2') { 0 } else { 1 } } })
+}
+
 function Get-CandidatePorts {
-  $list = New-Object System.Collections.Generic.List[string]
-  # 1) 首选：已知的 acm console（VID 0525 + PID A4A2，PnP 状态 OK）
+  $info = Get-PhonePortInfo
+  if ($info.Count -gt 0) { return @($info | ForEach-Object { $_.Com }) }
+  # Last resort for hosts without the PnpDevice module: enumerate port names but
+  # never touch the on-board ACPI serial port. Deliberately noisy in the log.
   try {
-    Get-PnpDevice -Class Ports -ErrorAction Stop |
-      Where-Object { $_.InstanceId -like '*VID_0525*' -and $_.Status -eq 'OK' } |
-      ForEach-Object {
-        if ($_.FriendlyName -match '\((COM\d+)\)') { [void]$list.Add($Matches[1]) }
-      }
-  } catch { }
-  # 1.5) Hard-exclude on-board physical serial ports (ACPI\PNP0501 etc).
-  #      Real bug we hit: after COM15 disappeared, the on-board COM1 from
-  #      SERIALCOMM was still openable, so the logger latched onto COM1 forever
-  #      -- status said "port=COM1 idle", i.e. it *looked* like it was recording
-  #      while actually reading a dead port, and it never switched back when the
-  #      device re-enumerated on COM15.
-  $onboard = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
-  try {
-    Get-PnpDevice -Class Ports -ErrorAction Stop |
-      Where-Object { $_.InstanceId -like 'ACPI\*' } |
-      ForEach-Object {
-        if ($_.FriendlyName -match '\((COM\d+)\)') { [void]$onboard.Add($Matches[1]) }
-      }
-  } catch { }
-  if ($onboard.Count -eq 0) { [void]$onboard.Add('COM1') }   # PnP scan failed -> fallback
-  # 2) Next: ports registered in the registry (skip on-board ones)
-  try {
-    $props = (Get-ItemProperty -Path 'HKLM:\HARDWARE\DEVICEMAP\SERIALCOMM').PSObject.Properties
-    foreach ($p in $props) {
-      if ($p.Name -like 'PS*') { continue }
-      if ("$($p.Value)" -match '^COM\d+$' -and -not $onboard.Contains("$($p.Value)")) {
-        [void]$list.Add("$($p.Value)")
-      }
+    $names = @([System.IO.Ports.SerialPort]::GetPortNames() | Where-Object { $_ -ne 'COM1' })
+    if ($names.Count -gt 0) {
+      Write-Host-Line "[logger] WARN Get-PnpDevice found no gadget; falling back to raw port list: $($names -join ', ')"
+      return $names
     }
   } catch { }
-  # 3) Fallback: usual suspects (also skip on-board)
-  foreach ($c in @('COM15','COM16','COM14','COM13','COM12','COM11','COM9')) {
-    if (-not $onboard.Contains($c)) { [void]$list.Add($c) }
-  }
-  return ($list | Select-Object -Unique)
+  return @()
 }
 
 function Open-SerialPort {
@@ -144,11 +159,13 @@ function Remove-OldLogs {
 # status 于是长期显示 "state=idle total_bytes=0"，看着像"设备卡死"，
 # 其实卡死的是记录器自己（它从 23:27 一直骗到重启）。
 # 判据：这个 COM 号背后的 PnP InstanceId 变了（或消失了）→ 旧句柄作废。
+# ⚠️ 必须只认 Status=OK 的节点：同一个 COM 号会留下 Status=Unknown 的幽灵条目，
+#    不筛的话会一直返回幽灵的 InstanceId，保鲜逻辑反而永不触发。
 function Get-PortInstanceId {
   param([string]$Com)
   if (-not $Com) { return $null }
   try {
-    $dev = Get-PnpDevice -Class Ports -ErrorAction Stop |
+    $dev = Get-PnpDevice -Class Ports -Status OK -ErrorAction Stop |
            Where-Object { $_.InstanceId -notlike 'ACPI\*' -and $_.FriendlyName -match "\($Com\)" } |
            Select-Object -First 1
     if ($dev) { return $dev.InstanceId }
@@ -156,9 +173,18 @@ function Get-PortInstanceId {
   return $null
 }
 
+function Get-PortInfoOf {
+  param([string]$Com)
+  if (-not $Com) { return $null }
+  $hit = Get-PhonePortInfo | Where-Object { $_.Com -eq $Com } | Select-Object -First 1
+  return $hit
+}
+
 # ---------------------------------------------------------------- 主流程
 $candidates = if ($PortName -eq 'auto') { Get-CandidatePorts } else { @($PortName) }
-Write-Host-Line ("[logger] candidate ports: " + ($candidates -join ', '))
+$info0 = @(Get-PhonePortInfo)
+Write-Host-Line ("[logger] gadget ports present: " + $(if ($info0.Count -gt 0) {
+    (($info0 | ForEach-Object { "$($_.Com)(PID $($_.Pid))" }) -join ', ') } else { '(none)' }))
 
 # Do NOT exit when no port is found. A dead logger means nobody reads the
 # device console, and an unread console can block PID1's write() forever ->
@@ -174,6 +200,10 @@ while (-not $open.Ok) {
 }
 $sp = $open.Port
 $portName = $open.Name
+$portInfo = Get-PortInfoOf $portName
+$portPid  = if ($portInfo) { $portInfo.Pid } else { '' }
+$portMi   = if ($portInfo) { $portInfo.Mi } else { '' }
+$portNode = if ($portInfo) { $portInfo.Node } else { '' }
 
 $lf      = New-LogFile
 $fs      = $lf.Stream
@@ -189,8 +219,11 @@ $lastProbe   = ''            # 诊断用：最近一块数据的可打印形式�
 $lastStallWarn = $null
 $lastStatus  = (Get-Date)
 $lastCleanup = (Get-Date)
-$portInst    = Get-PortInstanceId $portName   # 句柄保鲜：打开那一刻的 PnP 实例 ID
+$portInst    = if ($portInfo) { $portInfo.InstanceId } else { Get-PortInstanceId $portName }
 $lastPortCk  = Get-Date
+$hbUptime    = $null          # 心跳里带的设备 uptime，用来识别"刚开机"
+$devBootAt   = $null          # 推算出的设备开机时刻
+$bootLogged  = $false         # 只标一次"本次日志覆盖了一次冷启动"
 $stop        = $false
 
 function Write-Chunk {
@@ -211,11 +244,16 @@ function Write-Status {
   $lines = @(
     'pc_time='        + $now.ToString('yyyy-MM-dd HH:mm:ss'),
     'port='           + $portName,
+    'port_pid='       + $portPid,
+    'port_mi='        + $portMi,
+    'port_node='      + $portNode,
     'state='          + $State,
     'log_file='       + (Split-Path $lf.Path -Leaf),
     'total_bytes='    + $totalBytes,
     'last_data='      + $(if ($lastData)  { $lastData.ToString('yyyy-MM-dd HH:mm:ss') }  else { '(none)' }),
     'last_heartbeat=' + $(if ($lastHeart) { $lastHeart.ToString('yyyy-MM-dd HH:mm:ss') } else { '(none)' }),
+    'hb_uptime_s='    + $(if ($null -ne $hbUptime) { $hbUptime } else { '(none)' }),
+    'dev_boot_at='    + $(if ($devBootAt) { $devBootAt.ToString('yyyy-MM-dd HH:mm:ss') } else { '(unknown)' }),
     'last_probe='     + $lastProbe,
     'reconnects='     + $reconnects
   )
@@ -225,14 +263,17 @@ function Write-Status {
 # Ctrl+C 也要把收尾信息写进去
 try {
   Stamp 'logger start'
-  Write-Chunk ("[PC] Z17S serial logger | port=$portName baud=$Baud out=$OutDir`r`n")
+  Write-Chunk ("[PC] Z17S serial logger | port=$portName pid=$portPid mi=$portMi node=$portNode baud=$Baud out=$OutDir`r`n")
+  Write-Chunk ("[PC] gadget PID legend: A4A7=early boot console, A4A2=final RNDIS+ACM composite (built by z17s-usbnet.sh at boot+45s)`r`n")
   Write-Host-Line "[logger] recording $portName -> $($lf.Path)"
   Write-Host-Line "[logger] Ctrl+C to stop."
 
   while (-not $stop) {
     # --- 端口掉了就重连（重启前后 COM 会消失，必须等一会再试）
     if ($null -eq $sp -or -not $sp.IsOpen) {
-      Stamp 'port lost - waiting to reconnect'
+      Stamp ("port lost (" + $portName + " PID " + $portPid + ")" +
+             $(if ($devBootAt) { ", device uptime ~" + [int]((Get-Date) - $devBootAt).TotalSeconds + "s" } else { '' }) +
+             " - waiting to reconnect")
       Write-Status 'reconnecting'
       try { if ($sp) { $sp.Dispose() } } catch { }
       $sp = $null
@@ -245,11 +286,26 @@ try {
       $re = Open-SerialPort -Candidates $candidates
       if ($re.Ok) {
         $sp = $re.Port
+        $oldName = $portName
+        $oldInst = $portInst
+        $oldPid  = $portPid
         $portName = $re.Name
-        $portInst = Get-PortInstanceId $portName
+        $portInfo = Get-PortInfoOf $portName
+        $portInst = if ($portInfo) { $portInfo.InstanceId } else { Get-PortInstanceId $portName }
+        $portPid  = if ($portInfo) { $portInfo.Pid } else { '' }
+        $portMi   = if ($portInfo) { $portInfo.Mi } else { '' }
+        $portNode = if ($portInfo) { $portInfo.Node } else { '' }
         $reconnects++
         Stamp 'port reopened'
-        Write-Host-Line "[logger] reopened $portName (reconnect #$reconnects)"
+        Write-Host-Line "[logger] reopened $portName (PID $portPid, reconnect #$reconnects)"
+        # 设备换了 COM 号 = gadget 被重建。这是"开机 +45 秒自伤"的现场指纹，
+        # 必须显式写进日志，否则以后翻日志只会看到一次莫名其妙的断流。
+        if ($oldInst -and $portInst -and $oldInst -ne $portInst) {
+          Write-Chunk ("`r`n[PC " + (Get-Date).ToString('yyyy-MM-ddTHH:mm:ss.fff') +
+                       " device RE-ENUMERATED: $oldName (PID $oldPid) -> $portName (PID $portPid)" +
+                       " - gadget was rebuilt" + $(if ($devBootAt) {
+                           ", device uptime ~" + [int]((Get-Date) - $devBootAt).TotalSeconds + "s" } else { '' }) + "]`r`n")
+        }
       } else {
         Write-Host-Line "[logger] still no port, retrying..."
       }
@@ -275,7 +331,22 @@ try {
         # ⚠️ 不能只看单块 —— USB CDC/ACM 会分包，一行 42 字节可能被切成两块，
         #    而 "z17s-hb" 恰好跨在切点上时就漏检（曾因此误报"设备卡死"）。
         $probe = $hbTail + $text
-        if ($probe.Contains('z17s-hb')) { $lastHeart = Get-Date }
+        if ($probe.Contains('z17s-hb')) {
+          $lastHeart = Get-Date
+          # 心跳形如 "z17s-hb uptime=47 load=0.74/0.20/0.07"。
+          # uptime 是识别"这份日志是不是从冷启动开始"的唯一锚点 —— 顺便推出设备开机时刻。
+          if ($probe -match 'uptime=(\d+)') {
+            $hbUptime = [int]$Matches[1]
+            $devBootAt = (Get-Date).AddSeconds(-$hbUptime)
+            if (-not $bootLogged) {
+              $bootLogged = $true
+              Write-Chunk ("`r`n[PC " + (Get-Date).ToString('yyyy-MM-ddTHH:mm:ss.fff') +
+                           " device boot @ " + $devBootAt.ToString('HH:mm:ss') +
+                           " (uptime " + $hbUptime + "s) - gadget rebuild expected @ " +
+                           $devBootAt.AddSeconds(45).ToString('HH:mm:ss') + "]`r`n")
+            }
+          }
+        }
         $hbTail = if ($probe.Length -gt 16) { $probe.Substring($probe.Length - 16) } else { $probe }
 
         # 诊断：把这一块的可打印形式写进 status，出问题时一眼看清到底收到了什么
