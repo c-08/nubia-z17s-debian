@@ -75,6 +75,7 @@ restore_gserial() {
     i=0
     while [ "$i" -lt 10 ]; do [ -e /dev/ttyGS0 ] && break; i=$((i + 1)); sleep 1; done
     timeout 25 systemctl restart 'serial-getty@ttyGS0.service' 2>/dev/null
+    timeout 10 systemctl start z17s-logwatch.service 2>/dev/null      # 心跳也得回来
     log "ROLLBACK done: ttyGS0=$([ -e /dev/ttyGS0 ] && echo yes || echo no) usb0=$([ -e /sys/class/net/usb0 ] && echo yes || echo no)"
 }
 
@@ -87,6 +88,27 @@ if [ ! -d /sys/kernel/config/usb_gadget ]; then
     log "FATAL no configfs usb_gadget"
     exit 1
 fi
+
+# --------------------------------------------------------------- 0. 快速路径
+# 只要上一轮留下的 gadget 还健康，就**什么都不拆**。危险全在"拆"这一步：
+# unbind acm.usb0 的时候，如果主机还开着 COM 口、或者 z17s-logwatch 还攥着
+# /dev/ttyGS0，gs_close() 就会等这个 port 空闲；而本机内核 console 正是
+# ttyGS0，这个阻塞会传染到 PID1，把整机拖进"半死态"（详见 docs/修复记录.md §17）。
+if [ -s "$G/UDC" ] && [ -e /sys/class/net/usb0 ] && [ -e /dev/ttyGS0 ]; then
+    log "fast path: gadget already bound ($(cat "$G/UDC" 2>/dev/null)), 不重拆"
+    ip link set usb0 up 2>/dev/null
+    ip addr replace "$IP/$PREFIX" dev usb0 2>/dev/null
+    ip route replace default via "$GW" dev usb0 metric 1000 2>/dev/null
+    log "usb0 UP: $(ip -br addr show usb0 | tr -s ' ')"
+    log "=== done (fast path, 未触碰 gadget) ==="
+    exit 0
+fi
+
+# --------------------------------------------------- 0b. 先松开 ttyGS0 的持有者
+# 拆 gadget 期间不允许任何进程攥着 /dev/ttyGS0：持有者的 fd 让 ports[] 一直
+# busy，teardown 里的 gs_close() 就会卡住。心跳这一小段丢掉无所谓。
+timeout 10 systemctl stop z17s-logwatch.service 2>/dev/null
+sleep 1
 
 # ---------------------------------------------------------------- 1. free the UDC
 # The legacy g_serial module holds the UDC and owns ttyGS0 line 0.  Release both before
@@ -214,6 +236,13 @@ if [ -e /dev/ttyGS0 ]; then
     log "ttyGS0 ok, serial-getty: $(systemctl is-active serial-getty@ttyGS0.service 2>/dev/null)"
 else
     log "WARN ttyGS0 missing - serial console lost"
+fi
+
+# ------------------------------------------------- 6. 把日志管家放回去
+# ttyGS0 活了才启动它，否则它会拿到一个死 fd（旧版还会因此收到 SEGV）。
+if [ -e /dev/ttyGS0 ]; then
+    timeout 10 systemctl start z17s-logwatch.service 2>/dev/null
+    log "z17s-logwatch: $(systemctl is-active z17s-logwatch.service 2>/dev/null)"
 fi
 
 log "=== done (usb0=$([ -e /sys/class/net/usb0 ] && echo up || echo down)) ==="

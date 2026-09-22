@@ -138,6 +138,24 @@ function Remove-OldLogs {
   }
 }
 
+# ------------------------------------------------------------------ 句柄保鲜
+# 真事故：设备在开机 +45 秒重建 gadget，COM15 被摘掉又重新枚举，而记录器
+# 手里还攥着旧句柄 —— IsOpen 仍是 true、Read() 不报错、也永远读不到字节，
+# status 于是长期显示 "state=idle total_bytes=0"，看着像"设备卡死"，
+# 其实卡死的是记录器自己（它从 23:27 一直骗到重启）。
+# 判据：这个 COM 号背后的 PnP InstanceId 变了（或消失了）→ 旧句柄作废。
+function Get-PortInstanceId {
+  param([string]$Com)
+  if (-not $Com) { return $null }
+  try {
+    $dev = Get-PnpDevice -Class Ports -ErrorAction Stop |
+           Where-Object { $_.InstanceId -notlike 'ACPI\*' -and $_.FriendlyName -match "\($Com\)" } |
+           Select-Object -First 1
+    if ($dev) { return $dev.InstanceId }
+  } catch { }
+  return $null
+}
+
 # ---------------------------------------------------------------- 主流程
 $candidates = if ($PortName -eq 'auto') { Get-CandidatePorts } else { @($PortName) }
 Write-Host-Line ("[logger] candidate ports: " + ($candidates -join ', '))
@@ -171,6 +189,8 @@ $lastProbe   = ''            # 诊断用：最近一块数据的可打印形式�
 $lastStallWarn = $null
 $lastStatus  = (Get-Date)
 $lastCleanup = (Get-Date)
+$portInst    = Get-PortInstanceId $portName   # 句柄保鲜：打开那一刻的 PnP 实例 ID
+$lastPortCk  = Get-Date
 $stop        = $false
 
 function Write-Chunk {
@@ -226,6 +246,7 @@ try {
       if ($re.Ok) {
         $sp = $re.Port
         $portName = $re.Name
+        $portInst = Get-PortInstanceId $portName
         $reconnects++
         Stamp 'port reopened'
         Write-Host-Line "[logger] reopened $portName (reconnect #$reconnects)"
@@ -303,6 +324,18 @@ try {
     if (((Get-Date) - $lastStatus).TotalSeconds -ge 10) {
       Write-Status $(if ($got) { 'reading' } else { 'idle' })
       $lastStatus = Get-Date
+
+      # --- 句柄保鲜：设备重枚举过就把这个死句柄换掉（见 Get-PortInstanceId 注释）
+      $nowInst = Get-PortInstanceId $portName
+      if ($nowInst -ne $portInst) {
+        Write-Chunk ("`r`n[PC " + (Get-Date).ToString('yyyy-MM-ddTHH:mm:ss.fff') +
+                     " !! COM instance changed (" + $portInst + " -> " + $nowInst +
+                     ") - closing stale handle !!]`r`n")
+        Write-Host-Line "[logger] stale handle on $portName, reopening..."
+        try { if ($sp) { $sp.Close() } } catch { }
+        try { if ($sp) { $sp.Dispose() } } catch { }
+        $sp = $null
+      }
     }
 
     # --- 每小时清一次旧日志
