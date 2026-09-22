@@ -25,6 +25,12 @@
 .PARAMETER PortName
   'auto'（默认）自动探测；也可写死 'COM15'。
 
+.PARAMETER DrainSeconds
+  Seconds right after opening the port during which incoming data is treated as
+  BACKLOG (device output that piled up while nobody was reading). Backlog heartbeats
+  are tagged and never used as a boot-time anchor. Default 4. Raise it if the device
+  has been unread for a long time and the backlog bursts out slowly.
+
 .EXAMPLE
   .\z17s-serial-log.ps1
   .\z17s-serial-log.ps1 -PortName COM15 -OutDir D:\z17s-log
@@ -39,6 +45,7 @@ param(
   [int]    $PollMs       = 150,
   [int]    $ReopenDelayS = 6,
   [int]    $StallWarnSec = 90,
+  [int]    $DrainSeconds = 4,
   [int]    $EarlyFallbackSec = 180,
   [switch] $WatchEarlyConsole
 )
@@ -249,6 +256,10 @@ while (-not $open.Ok) {
 }
 $sp = $open.Port
 $portName = $open.Name
+# drain window after opening the port: data arriving inside it is treated as backlog
+# (see the $drainUntil note further down)
+$drainUntil = (Get-Date).AddSeconds($DrainSeconds)
+$hbFresh    = $false
 $portInfo = Get-PortInfoOf $portName
 $portPid  = if ($portInfo) { $portInfo.Pid } else { '' }
 $portMi   = if ($portInfo) { $portInfo.Mi } else { '' }
@@ -273,6 +284,18 @@ $lastPortCk  = Get-Date
 $hbUptime    = $null          # 心跳里带的设备 uptime，用来识别"刚开机"
 $devBootAt   = $null          # 推算出的设备开机时刻
 $bootLogged  = $false         # 只标一次"本次日志覆盖了一次冷启动"
+# NOTE (ASCII only - PS 5.1 reads BOM-less files as ANSI and CJK breaks parsing):
+#   Opening the port first delivers BACKLOG: while nobody was reading /dev/ttyGS0 the
+#   device kept writing (logwatch heartbeat every 10s) and those bytes piled up in the
+#   tty buffer, so they all rush out at once on open. They are NOT "just now".
+#   Deriving the boot time from them is wildly wrong (measured: real boot 21:22 was
+#   reported as 22:31, because the oldest backlog heartbeat was uptime=1871 from 21:53).
+#   So after opening we run a drain window; heartbeats inside it are tagged backlog and
+#   are never used as a time anchor.
+$drainUntil  = $null          # end of the drain window; heartbeats before it may be backlog
+$hbFresh     = $false         # have we seen a FRESH (non-backlog) heartbeat yet
+$devBootSrc  = ''             # where dev_boot_at came from: fresh / backlog
+$backlogNoted = $false        # the backlog notice is written to the log only once
 $stop        = $false
 
 function Write-Chunk {
@@ -303,6 +326,9 @@ function Write-Status {
     'last_heartbeat=' + $(if ($lastHeart) { $lastHeart.ToString('yyyy-MM-dd HH:mm:ss') } else { '(none)' }),
     'hb_uptime_s='    + $(if ($null -ne $hbUptime) { $hbUptime } else { '(none)' }),
     'dev_boot_at='    + $(if ($devBootAt) { $devBootAt.ToString('yyyy-MM-dd HH:mm:ss') } else { '(unknown)' }),
+    # dev_boot_at is only trustworthy when hb_src=fresh; =backlog means we have not yet
+    # seen a fresh heartbeat (backlog data can skew the boot time by tens of minutes)
+    'hb_src='         + $(if ($devBootSrc) { $devBootSrc } else { '(none)' }),
     'last_probe='     + $lastProbe,
     'reconnects='     + $reconnects
   )
@@ -345,6 +371,11 @@ try {
         $portMi   = if ($portInfo) { $portInfo.Mi } else { '' }
         $portNode = if ($portInfo) { $portInfo.Node } else { '' }
         $reconnects++
+        # after a reconnect the backlog piled up during the outage floods out too
+        $drainUntil = (Get-Date).AddSeconds($DrainSeconds)
+        $hbFresh    = $false
+        $bootLogged = $false
+        $backlogNoted = $false
         Stamp 'port reopened'
         Write-Host-Line "[logger] reopened $portName (PID $portPid, reconnect #$reconnects)"
         # 设备换了 COM 号 = gadget 被重建。这是"开机 +45 秒自伤"的现场指纹，
@@ -382,17 +413,57 @@ try {
         $probe = $hbTail + $text
         if ($probe.Contains('z17s-hb')) {
           $lastHeart = Get-Date
-          # 心跳形如 "z17s-hb uptime=47 load=0.74/0.20/0.07"。
-          # uptime 是识别"这份日志是不是从冷启动开始"的唯一锚点 —— 顺便推出设备开机时刻。
+          # Heartbeat looks like "z17s-hb uptime=47 load=0.74/0.20/0.07".
+          # uptime is the only anchor that tells whether this log starts at a cold boot,
+          # and it is what lets us derive the device boot time.
+          #
+          # BUT what arrives right after opening the port is BACKLOG (old heartbeats that
+          # piled up while nobody was reading). Deriving the boot time from it is off by
+          # tens of minutes (measured: 69 min). Discriminators:
+          #   (a) inside the drain window right after open, or
+          #   (b) this block carries several heartbeats (backlog bursts out, a fresh
+          #       heartbeat only comes once every 10s)
+          # -> treat as backlog: tag it, never use it as a time anchor.
+          # count on $text, NOT on $probe: $probe carries a 16-char tail of the previous
+          # block, and if that tail happens to end exactly on "z17s-hb" a single fresh
+          # heartbeat would be miscounted as two and wrongly classified as backlog.
+          $hbCount = ([regex]::Matches($text, 'z17s-hb')).Count
+          $isBacklog = $false
+          if (-not $hbFresh) {
+            if ($drainUntil -and (Get-Date) -lt $drainUntil) { $isBacklog = $true }
+            elseif ($hbCount -ge 2)                          { $isBacklog = $true }
+          }
           if ($probe -match 'uptime=(\d+)') {
             $hbUptime = [int]$Matches[1]
-            $devBootAt = (Get-Date).AddSeconds(-$hbUptime)
-            if (-not $bootLogged) {
-              $bootLogged = $true
-              Write-Chunk ("`r`n[PC " + (Get-Date).ToString('yyyy-MM-ddTHH:mm:ss.fff') +
-                           " device boot @ " + $devBootAt.ToString('HH:mm:ss') +
-                           " (uptime " + $hbUptime + "s) - gadget rebuild expected @ " +
-                           $devBootAt.AddSeconds(45).ToString('HH:mm:ss') + "]`r`n")
+            if ($isBacklog) {
+              # backlog: record the derived value in status but tag it, so nobody trusts it
+              if (-not $devBootAt -or $devBootSrc -ne 'fresh') {
+                $devBootAt  = (Get-Date).AddSeconds(-$hbUptime)
+                $devBootSrc = 'backlog'
+              }
+              if (-not $backlogNoted) {
+                $backlogNoted = $true
+                Write-Chunk ("`r`n[PC " + (Get-Date).ToString('yyyy-MM-ddTHH:mm:ss.fff') +
+                             " NOTE everything below until the next 'device boot @ ... (fresh)'" +
+                             " line is BACKLOG - buffered device output from before this logger" +
+                             " opened the port. Its uptime values are in the past and MUST NOT" +
+                             " be used as a time anchor.]`r`n")
+              }
+            } else {
+              $devBootAt  = (Get-Date).AddSeconds(-$hbUptime)
+              $devBootSrc = 'fresh'
+              if (-not $hbFresh) {
+                $hbFresh = $true
+                Write-Host-Line ("[logger] first fresh heartbeat: device boot @ " +
+                  $devBootAt.ToString('HH:mm:ss') + " (uptime " + $hbUptime + "s)")
+              }
+              if (-not $bootLogged) {
+                $bootLogged = $true
+                Write-Chunk ("`r`n[PC " + (Get-Date).ToString('yyyy-MM-ddTHH:mm:ss.fff') +
+                             " device boot @ " + $devBootAt.ToString('HH:mm:ss') +
+                             " (uptime " + $hbUptime + "s, fresh) - gadget rebuild expected @ " +
+                             $devBootAt.AddSeconds(45).ToString('HH:mm:ss') + "]`r`n")
+              }
             }
           }
         }
