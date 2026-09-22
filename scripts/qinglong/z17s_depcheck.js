@@ -350,8 +350,13 @@ attempt('host', '中文字体', () => {
     ctx.fillStyle = 'rgba(255,255,255,0.72)';
     ctx.fillText('Nubia Z17S · MSM8998 · Debian 13 trixie · Qinglong container', 32, 82);
 
-    const pass = results.filter(r => r.ok).length;
+    // 卡片上的计数必须和后面的汇总表对得上。注意"出图"这一项要等 PNG 存盘后
+    // 才会 rec()，而卡片在这之前就画好了 —— 直接数 results 会少数 1 项，
+    // 进度条分母也会少 1。能走到这里就说明 canvas 可用、"出图"必然 PASS，
+    // 所以这里把它自己预算进去（+1）。
+    const pass = results.filter(r => r.ok).length + 1;
     const fail = results.filter(r => !r.ok).length;
+    const totalN = results.length + 1;
     const lines = [
       `内核   ${os.release()}  ${os.arch()}`,
       `内存   ${(os.totalmem() / 1048576).toFixed(0)} MB（空闲 ${(os.freemem() / 1048576).toFixed(0)} MB）`,
@@ -368,7 +373,7 @@ attempt('host', '中文字体', () => {
     ctx.fillStyle = 'rgba(255,255,255,0.18)';
     ctx.fillRect(32, barY, barW, barH);
     ctx.fillStyle = '#3fb950';
-    ctx.fillRect(32, barY, barW * (pass / results.length), barH);
+    ctx.fillRect(32, barY, barW * (pass / totalN), barH);
 
     ctx.font = `14px "${family}"`;
     ctx.fillStyle = 'rgba(255,255,255,0.65)';
@@ -376,8 +381,9 @@ attempt('host', '中文字体', () => {
     ctx.fillText(`中文字体：${family === 'Z17S-CJK' ? '文泉驿微米黑（已注册）' : '缺失，中文已降级为方框'}`, 32, 408);
 
     pngPath = `${SCRIPT_DIR}/z17s-depcheck.png`;
-    fs.writeFileSync(pngPath, cv.toBuffer('image/png'));
-    rec('nodejs', 'canvas 出图', true, `${W}x${H} PNG 已存 ${pngPath} (${fs.statSync(pngPath).size}B) 字体=${family}`);
+    const png = cv.toBuffer('image/png');
+    fs.writeFileSync(pngPath, png);
+    rec('nodejs', 'canvas 出图', true, `${W}x${H} PNG 已存 ${pngPath} (${png.length}B) 字体=${family}`);
   } catch (e) {
     rec('nodejs', 'canvas 出图', false, e.message);
   }
