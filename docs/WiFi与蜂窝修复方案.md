@@ -23,7 +23,7 @@
 
 | 原方案 | 原估价 | 核实后 | 判定 |
 |---|---|---|---|
-| **W1** 改 `key_hw_accel` → 软解，**重编内核 + 刷 boot** | 高风险（刷 boot） | 🔑 **要改的是 `ath10k_core.ko`（不是 `mac80211.ko`），只需换一个 `.ko`，不碰 boot** —— 失败最多"没有 Wi-Fi"，系统照常起、SSH 照常通 | ✅ **值得做，风险比原估低一档**（补丁见 §2.3） |
+| **W1** 改 `key_hw_accel` → 软解，**重编内核 + 刷 boot** | 高风险（刷 boot） | 🔑 **要改的是 `ath10k_core.ko`（不是 `mac80211.ko`）**。⚠️ 2026-09-25 更正：**要持久生效就得换进 boot 的 ramdisk ⇒ 必须重新签名**（换 `/lib/modules` 会被开机覆盖） | ✅ **值得做**；风险点是"签名"，不是"模块"（见 [boot镜像签名与恢复.md](boot镜像签名与恢复.md)） |
 | **W1** 的"模块参数开关" | 需要重编才能改 | 🔑 **`key_hw_accel` 不是参数**（源码里没有 `module_param`），但补丁可以挂在**现成的 `cryptmode` 参数**上 | ✅ 默认行为零变化，挂参即切换 |
 | **W2** `apt-get --reinstall wireless-regdb` | 零风险，应该能修 | ❌ **大概率无效** —— 内核开了 `REQUIRE_SIGNED_REGDB`，问题在**签名**不在文件损坏 | 🔧 改成"从内核源码树取配套两个文件" |
 | **W2** 合并取证开关一起刷 | 顺手做 | ⚠️ 取证开关是**核心选项（非模块）**，**必须刷 boot + 过 AVB 签名** | ⚠️ **建议与 W1 拆开**，见 §4 |
@@ -45,8 +45,8 @@
 
 | # | 事实 | 出处 | 对方案的影响 |
 |---|---|---|---|
-| 1 | **`CONFIG_MAC80211=m`**（还有 `CFG80211=m`、`ATH10K=m`、`ATH10K_SNOC=m`） | config | ★ **不用重编内核、不用刷 boot** —— 只换 `/lib/modules/6.12.95+/kernel/net/mac80211/mac80211.ko` |
-| 2 | **没有 `CONFIG_MODULE_SIG*`**，但有 `CONFIG_MODVERSIONS=y` | config | 替换的 `.ko` **不需要签名** ✅；但**符号 CRC 必须一致** → 必须同源码 + 同 config + 同工具链 |
+| 1 | **`CONFIG_MAC80211=m`**（还有 `CFG80211=m`、`ATH10K=m`、`ATH10K_SNOC=m`） | config | ★ **不用重编内核** —— 换的是 `.ko`。⚠️ 但本机 initramfs **每次开机把 `/lib/modules` 覆盖回** boot 内嵌那份 ⇒ **要持久仍须改 boot 镜像并重签**（§2.4） |
+| 2 | **没有 `CONFIG_MODULE_SIG*`**，但有 `CONFIG_MODVERSIONS=y` | config | 替换的 `.ko` **本身不需要签名** ✅；但**符号 CRC 必须一致** → 必须同源码 + 同 config + 同工具链。⚠️ **别混淆**：`.ko` 不用签 ≠ 装它的 **boot 镜像**不用签（那个**必须**签，见 [boot镜像签名与恢复.md](boot镜像签名与恢复.md)） |
 | 3 | **`CONFIG_CFG80211_REQUIRE_SIGNED_REGDB=y`** + `CONFIG_CFG80211_USE_KERNEL_REGDB_KEYS=y` | config | ★ 解释 `regulatory.db is malformed` —— 内核只认**用自己内置 key 签的** regdb |
 | 4 | **`CONFIG_SOFTLOCKUP_DETECTOR` / `DETECT_HUNG_TASK` / `MAGIC_SYSRQ` / `PSTORE` 全部没有**（`KALLSYMS=y`、`DEBUG_FS=y`、`DYNAMIC_DEBUG=y` 有） | config | 取证开关**确实该加**；但它们是核心选项 → **必须刷 boot**；而 dyndbg 已可用，见 §3.2 |
 | 5 | boot 镜像要过 **AVB 签名**（`BootSignature.jar` + `verity.pk8` + `verity.x509.der`），且 `abootimg -k` 要求 `Image.gz + DTB×3` | `kernel/build-boot.sh`、`kernel/README.md` | 刷 boot 的**真实成本**比"dd 进去"高得多 → 又一个"W1 别刷 boot"的理由 |
@@ -147,9 +147,36 @@ strings "$K" | grep -i "WCN3990\|cryptmode"
 
 **变体**：如果不想要参数开关、要"开机即软解"，可把 A 改成无条件（`QCA_REV_WCN3990(ar)` 直接置位、不看 `cryptmode`）。代价是 A/B 对比要重编两次。
 
-### 2.4 ★ 实施形态：只换一个 `.ko`，**不刷 boot**
+### 2.4 ★ 实施形态：改的是一个 `.ko`，但**要持久就必须刷 boot**
 
 因为 `CONFIG_ATH10K=m`，而且 **`ath10k` 不是启动必需模块**（网络入口是 gadget 的 RNDIS + 静态 IP）→ 换坏了最多"没有 Wi-Fi"，开机、`usb0`、SSH、串口**全都不受影响**，能当场回滚。`ath10k_snoc.ko` **不用换**（本次不动 `ath10k_core_create` 这类被 snoc import 的符号）。
+
+> 🔴 **2026-09-25 重要更正："只换 `.ko`、不碰 boot"只说对了一半**
+>
+> 替换 `/lib/modules/.../ath10k_core.ko` 会**在下次开机被冲掉** —— 本机 initramfs 的 `init` 里有这一步：
+>
+> ```sh
+> # init（在 switch_root 之前）
+> screen_log "DRM_MOD copy modules to rootfs"
+> $BB cp -a /lib/modules/. /rootfs/lib/modules/
+> ```
+>
+> 方向是 **ramdisk → rootfs**：每次开机都把 **boot 镜像里那份**模块覆盖回 `/lib/modules`。
+> （这正是"改 `/lib/modules` 不持久"的原因，也是这次要去改 boot 镜像的动机。）
+>
+> ⇒ **两种形态要分清：**
+>
+> | 目的 | 做法 | 代价 |
+> |---|---|---|
+> | **当场试一把**（不重启） | 只换 rootfs 的 `.ko` + `modprobe` | 零风险、可当场回滚；**重启即失效** |
+> | **持久生效** | 把 `.ko` 换进 **boot 镜像的 ramdisk** → **必须重新签名** | 一次刷 boot |
+>
+> 🔴 改 boot 镜像**必须重签**，否则**黑屏开不了机**（引导器拒载、内核日志无痕）。
+> 规则、验签方法、三重闸门与恢复通道见 **[boot镜像签名与恢复.md](boot镜像签名与恢复.md)**。
+>
+> ⚠️ 还有一条配套项：`/etc/modprobe.d/99-z17s-ath10k.conf`（`options ath10k_core cryptmode=1`，
+> 在 **userdata** 上、持久）**只能配补丁模块**；一旦刷回**原厂模块**，`cryptmode=1` 会让
+> ath10k probe 失败（WCN3990 不支持 RAW_MODE）⇒ **彻底没有 wlan0**。刷纯净版时必须删掉它。
 
 > ✅ **构建环境现成（2026-09-25 实测，推翻上一版"必须先恢复 `.config` 并全量重编"的判断）**
 > `O=` 输出树 **`/root/z17s-debian/build/kernel-out` 完整存在**：`.config`（161 564 B，与
