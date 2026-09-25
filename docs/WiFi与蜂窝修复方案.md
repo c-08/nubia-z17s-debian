@@ -8,6 +8,13 @@
 > **C 节结论改为"值得一试"**；C1a / C1b 两条绕行路线依然有效，作为兜底。
 > **结论：方向成立，但原方案把 W1 的代价估高了一档、把 C1b 的代价估低了一档。**
 >
+> ⚠️ **2026-09-25 又一处修订（W1，源码级）**：**`key_hw_accel` 不是钩子，是日志插桩**（`net/mac80211/key.c` 里 6 条
+> `pr_info`，外层逻辑与上游一致，上游本就支持"驱动返回 1 → 软解"）⇒ **`mac80211.ko` 不用改**；
+> 真正的软解开关在 **`ath10k` 驱动**（`mac.c:6592` 的 `if (arvif->nohwcrypt) return 1;`），
+> 编译产物是 **`ath10k_core.ko`**。而 `nohwcrypt` 在 WCN3990 上**目前永远为 false**
+> （唯一置位入口 `core.c:2673` 被 `RAW_MODE_SUPPORT` 挡住）—— 这才是"key 照样交给固件、固件照崩"的原因。
+> **详见 §2**（已按新结论重写，含确切补丁与 file:line）。
+>
 > 已穷尽、不要再试的方向见 [硬件现状.md §一](硬件现状.md)；本文只写"还能做什么"与"怎么做最省"。
 
 ---
@@ -16,8 +23,8 @@
 
 | 原方案 | 原估价 | 核实后 | 判定 |
 |---|---|---|---|
-| **W1** 改 `key_hw_accel` → 软解，**重编内核 + 刷 boot** | 高风险（刷 boot） | 🔑 **`mac80211` 是模块，只需换一个 `.ko`，不碰 boot** —— 失败最多"没有 Wi-Fi"，系统照常起、SSH 照常通 | ✅ **值得做，风险比原估低一档** |
-| **W1** 的"模块参数开关" | 需要重编才能改 | 🔑 **可能连编都不用编**（先查它是不是 `module_param`） | ✅ 先做 5 分钟探测 |
+| **W1** 改 `key_hw_accel` → 软解，**重编内核 + 刷 boot** | 高风险（刷 boot） | 🔑 **要改的是 `ath10k_core.ko`（不是 `mac80211.ko`），只需换一个 `.ko`，不碰 boot** —— 失败最多"没有 Wi-Fi"，系统照常起、SSH 照常通 | ✅ **值得做，风险比原估低一档**（补丁见 §2.3） |
+| **W1** 的"模块参数开关" | 需要重编才能改 | 🔑 **`key_hw_accel` 不是参数**（源码里没有 `module_param`），但补丁可以挂在**现成的 `cryptmode` 参数**上 | ✅ 默认行为零变化，挂参即切换 |
 | **W2** `apt-get --reinstall wireless-regdb` | 零风险，应该能修 | ❌ **大概率无效** —— 内核开了 `REQUIRE_SIGNED_REGDB`，问题在**签名**不在文件损坏 | 🔧 改成"从内核源码树取配套两个文件" |
 | **W2** 合并取证开关一起刷 | 顺手做 | ⚠️ 取证开关是**核心选项（非模块）**，**必须刷 boot + 过 AVB 签名** | ⚠️ **建议与 W1 拆开**，见 §4 |
 | **C1b** 手机卡经 PC 中转（手机 **USB 共享**给 PC） | 零改动 | ⚠️ **会撞网段** —— Windows ICS 默认就用 `192.168.137.0/24`，和 `z17s-usb` 完全相同 | 🔧 改成"**手机开 Wi-Fi 热点**给 PC"，才真的零改动 |
@@ -45,101 +52,117 @@
 
 ---
 
-## 2 W1：禁用 `key_hw_accel`，让 Wi-Fi 回退软件解密
+## 2 W1：让 `ath10k` 在 WCN3990 上走软件解密
 
-### 2.1 为什么这条**确实**是没试过的路
+> ⚠️ **2026-09-25 源码级修正（本节此前的前提是错的）**
+> 1. **`key_hw_accel` 不是"自研钩子"，是纯日志插桩**：`net/mac80211/key.c` 里那 6 条 `pr_info`
+>    （129 / 167 / 189 / 230 / 234 / 237）只是往 `ieee80211_key_enable_hw_accel()` 里加的打印，
+>    **外层逻辑与上游 Linux 一字不差**。上游本来就接受"驱动返回 1 → 走软件解密"
+>    （`key.c:229-232`：`if (ret == 1) return 0;`，上面注释就是 *all of these we can do in software*）。
+>    ⇒ **`mac80211.ko` 不需要改**，不是因为"钩子在别处"，而是因为它从来就原生支持软解。
+> 2. **真正的软解开关在 `ath10k` 驱动里**，编译产物是 **`ath10k_core.ko`**（依赖 `cfg80211`）。
+>    ⇒ 编译/替换目标从 `mac80211.ko` **改为 `ath10k_core.ko`**。
 
-`cryptmode` 和 `key_hw_accel` 在**两个不同的层**上：
+### 2.1 机制（源码位置已逐条核对，源码树 `/root/z17s-kbuild/linux-6.12.95`）
 
-| | 归属 | 作用 | 状态 |
-|---|---|---|---|
-| `cryptmode=1` | **`ath10k`** 模块参数 | 告诉**固件**"自己解密还是透传" | ❌ 实测被拒（固件不接受） |
-| `key_hw_accel` | **`mac80211`** 钩子 | 决定 **key 是否下发到硬件**（`drv_set_key`） | 没试过 |
+| 位置 | 代码 | 含义 |
+|---|---|---|
+| `ath10k/mac.c:6592` | `if (arvif->nohwcrypt) return 1;` | ★ **唯一的软解生效点**：返回 1 → mac80211 自己解密 |
+| `ath10k/mac.c:320` | `if (arvif->nohwcrypt) return 1;` | 同一个判断，另一处入口（`ath10k_install_key`） |
+| `ath10k/mac.c:5723` | `if (test_bit(ATH10K_FLAG_HW_CRYPTO_DISABLED)) arvif->nohwcrypt = true;` | `nohwcrypt` 的来源 |
+| `ath10k/mac.c:5726` | `if (nohwcrypt && !RAW_MODE) { ret=-EINVAL; warn("cryptmode module param needed for sw crypto"); goto err; }` | ⚠️ **守卫在 `add_interface`（vdev create）里，不在 `set_key`**：过不去 → **接口都建不起来** |
+| `ath10k/core.c:2666` | `cryptmode=1` 要求 `FW_FEATURE_RAW_MODE_SUPPORT` | HL1.0 固件没有 → `-EINVAL`（= 实测"cryptmode=1 被 probe 拒"） |
+| `ath10k/core.c:2672-2673` | `cryptmode=1` 会**同时**置 `RAW_MODE` + `HW_CRYPTO_DISABLED` | ⚠️ 见下方陷阱 |
+| `ath10k/core.c:2694` | `RAW_MODE` 会把 `rx_decap_mode` 切成 `ATH10K_HW_TXRX_RAW` | 🔴 这是发给**固件**的 WMI 参数，HL1.0 不支持 → **别为了软解去置 RAW_MODE** |
+| `ath10k/mac.c:10103-10114` | WCN3990 清 `SW_CRYPTO_CONTROL`（注释/日志 *allow SW crypto fallback*） | ✅ **已在树里、也已在设备模块里**（见 §2.2），不用再改 |
 
-`cryptmode` 被拒不等于 `key_hw_accel` 不能绕。**如果 mac80211 不下发 key，固件手里就没有 key，数据只能由 mac80211 软件解密** —— 这条通路与 `cryptmode` 无关。
+**要补的只有第三步**：`ATH10K_FLAG_HW_CRYPTO_DISABLED` 全树**只有 `core.c:2673` 会置位**，
+而那条路被 `RAW_MODE_SUPPORT` 挡死 ⇒ **WCN3990 上 `nohwcrypt` 恒为 false**
+⇒ `set_key` 照样把 CCMP key 交给固件 ⇒ 固件照崩。**这才是崩的真正机制。**
 
-### 2.2 🔑 第 0 步：先花 5 分钟探清它是什么（可能连编都不用编）
+### 2.2 已经探明的部分（2026-09-25 完成，**原来那三条探针作废**）
 
-设备开机后，**手编之前**先跑这三条：
+- `strings mac80211.ko` 命中的只有 6 条 `pr_info` 格式串 ⇒ 是**日志插桩**，既不是模块参数、也不是分支逻辑
+- 源码里没有 `module_param(key_hw_accel)` ⇒ `/sys/module/mac80211/parameters/` 里不会有它，`echo 0` 那套**不成立**
+- 编译产物 `ath10k_core.ko` 里**已含** `WCN3990: clear SW_CRYPTO_CONTROL (allow SW crypto fallback)`
 
-```bash
-# ① 它是不是模块参数？（若是 → 直接 echo 切，零编译）
-ls -la /sys/module/mac80211/parameters/
-modinfo mac80211 | grep -i parm          # 看有没有 parm: key_hw_accel:...
+#### 2.2.1 上机后先核一件事（1 分钟，防"改了等于没改"）
 
-# ② 它是硬编码还是参数？（在 .ko 里找字符串）
-K=/lib/modules/$(uname -r)/kernel/net/mac80211/mac80211.ko
-strings "$K" | grep -i "key_hw_accel\|sw_crypto\|hw_accel"
-grep -ao "parm=key_hw_accel" "$K"        # 命中 = 是模块参数
-
-# ③ 它是怎么接进 key 路径的（看有没有伴随的 printk 格式串）
-strings "$K" | grep -iE "accel|hw_crypto|sw_crypto" | head
-```
-
-**分支判断**：
-
-- **命中 `parm=key_hw_accel`** → 直接生效，**W1 变成一个 shell 命令**：
-  ```bash
-  echo 0 > /sys/module/mac80211/parameters/key_hw_accel   # 或 Y/N、1/0
-  ```
-  然后按 §2.6 验收。**整个 W1 到此结束，不用编任何东西。**
-- **只命中字符串、`parameters/` 里没有** → 是被硬编码调用的（或编译期 `#define`），走 §2.3。
-
-> ⚠️ 别跳过这一步。原方案直接跳到"grep 源码 + 重编"，但**如果它本来就是参数**，那你要花半天做的事，本来 5 秒就能做完。
-
-### 2.3 如果确实要改源码
-
-在上游源码树里定位：
+确认设备在跑的模块就是源码树编出来的那一版：
 
 ```bash
-cd <6.12.95 源码树>
-grep -rn "key_hw_accel" net/mac80211/ drivers/net/wireless/ath/
-grep -rn "key_hw_accel" . 2>/dev/null | head        # 兜底全树搜
+K=/lib/modules/$(uname -r)/kernel/drivers/net/wireless/ath/ath10k/ath10k_core.ko
+strings "$K" | grep -i "WCN3990\|cryptmode"
+# 期望同时看到：
+#   WCN3990: clear SW_CRYPTO_CONTROL (allow SW crypto fallback)
+#   cryptmode > 0 requires raw mode support from firmware
 ```
 
-**改法（推荐形态）**：把"强制硬件解密"变成**运行时可切的模块参数**，而不是直接删掉：
+### 2.3 补丁：两处（都走 `cryptmode` 模块参数，**默认行为零变化**）
+
+**A. `ath10k/core.c:2665`（触发开关）** —— 让 `cryptmode=1` 在 WCN3990 上被接受，但**只置 `HW_CRYPTO_DISABLED`、不置 `RAW_MODE`**：
 
 ```c
-/* 默认保持原行为(=1)，用参数切换到软解 */
-static bool key_hw_accel = true;
-module_param(key_hw_accel, bool, 0644);
-MODULE_PARM_DESC(key_hw_accel, "1=force HW crypto (vendor default), 0=allow SW crypto");
+ 	case ATH10K_CRYPT_MODE_SW:
+ 		if (!test_bit(ATH10K_FW_FEATURE_RAW_MODE_SUPPORT,
+ 			      fw_file->fw_features)) {
++			if (QCA_REV_WCN3990(ar)) {
++				ath10k_warn(ar, "WCN3990: SW crypto without raw mode, HW crypto disabled\n");
++				set_bit(ATH10K_FLAG_HW_CRYPTO_DISABLED, &ar->dev_flags);
++				break;	/* ★ 关键：不置 RAW_MODE */
++			}
+ 			ath10k_err(ar, "cryptmode > 0 requires raw mode support from firmware");
+ 			return -EINVAL;
+ 		}
 ```
 
-**为什么默认值要用"原行为"而不是"软解"**：
-
-1. 换模块这个动作本身**行为零变化** → 先确认"模块能加载、Wi-Fi 和以前一样"，再切参数看差异，**变量干净**；
-2. 一次构建就覆盖两种状态，**不用来回编译**；
-3. 万一软解完全连不上，`echo 1` 当场退回（这台机器还有 `usb0` + 串口，不会失联）。
-
-然后在钩子处改为受控：
+**B. `ath10k/mac.c:5726`（必须的守卫放宽）** —— 否则 `add_interface` 直接 `-EINVAL`，"接口都建不起来"：
 
 ```c
--   /* vendor hook: force hardware decryption */
--   ...accelerated path...
-+   if (key_hw_accel) { ...accelerated path... } else { ...software path... }
+ 	if (arvif->nohwcrypt &&
+-	    !test_bit(ATH10K_FLAG_RAW_MODE, &ar->dev_flags)) {
++	    !test_bit(ATH10K_FLAG_RAW_MODE, &ar->dev_flags) &&
++	    !QCA_REV_WCN3990(ar)) {
+ 		ret = -EINVAL;
+ 		ath10k_warn(ar, "cryptmode module param needed for sw crypto\n");
+ 		goto err;
+ 	}
 ```
 
-⚠️ 具体改哪一行要看它实际拦在哪儿（`ieee80211_key_replace` / `ieee80211_set_key_rx_seq` / `drv_set_key` 的哪一段）。**§3.2 的 dyndbg 能先把这一点看清，别盲改。**
+`mac.c:10103-10114`（清 `SW_CRYPTO_CONTROL`）**已在树里，不用动**。
+
+**生效方式**：`/etc/modprobe.d/99-z17s-ath10k.conf` 里写 `options ath10k_core cryptmode=1`；**不写这个文件 = 完全原来的行为**（变量干净、删文件即回退）。
+
+🔴 **两条纪律**
+1. **不要靠"假造 `RAW_MODE_SUPPORT`"来让 `cryptmode=1` 通过** —— `RAW_MODE` 会把 `rx_decap_mode` 改成 `ATH10K_HW_TXRX_RAW`（发给固件的 WMI 参数），HL1.0 不支持，会把 RX 一起弄坏。
+2. A、B 缺一不可：只改 A → 接口建不起来；只改 B → `nohwcrypt` 恒 false，key 照样交固件。
+
+**变体**：如果不想要参数开关、要"开机即软解"，可把 A 改成无条件（`QCA_REV_WCN3990(ar)` 直接置位、不看 `cryptmode`）。代价是 A/B 对比要重编两次。
 
 ### 2.4 ★ 实施形态：只换一个 `.ko`，**不刷 boot**
 
-因为 `CONFIG_MAC80211=m`，而且 **`mac80211` 不是启动必需模块**（网络入口是 gadget 的 RNDIS + 静态 IP，不依赖 mac80211）→ 换坏了最多"没有 Wi-Fi"，开机、`usb0`、SSH、串口**全都不受影响**，能当场回滚。
+因为 `CONFIG_ATH10K=m`，而且 **`ath10k` 不是启动必需模块**（网络入口是 gadget 的 RNDIS + 静态 IP）→ 换坏了最多"没有 Wi-Fi"，开机、`usb0`、SSH、串口**全都不受影响**，能当场回滚。`ath10k_snoc.ko` **不用换**（本次不动 `ath10k_core_create` 这类被 snoc import 的符号）。
+
+> 🔴 **重编前必须先恢复构建环境**：`/root/z17s-kbuild/linux-6.12.95` 目前是**干净源码树（无 `.config`、无 `Module.symvers`）**。
+> 产物在 `/root/z17s-kbuild/mods/lib/modules/6.12.95+/`（2026-09-19 14:32），运行内核配置备份在
+> `/root/z17s-kbuild/running.running.config`。`CONFIG_MODVERSIONS=y` ⇒ **没有正确的 `Module.symvers` 编出来的模块 CRC 是错的，上机会被内核直接拒载**（白跑一趟）。先用配置备份生成 `.config` 再编。
 
 ```bash
 # 0) 上机前先验兼容性（不替换就能判断会不会被拒）
-modinfo 新-mac80211.ko | grep -E "vermagic|depends"
-modprobe --dump-modversions 新-mac80211.ko | sort > /tmp/new.crc
-modprobe --dump-modversions /lib/modules/$(uname -r)/kernel/net/wireless/cfg80211.ko \
+modinfo 新-ath10k_core.ko | grep -E "vermagic|depends"      # 期望 depends: cfg80211,mac80211
+modprobe --dump-modversions 新-ath10k_core.ko | sort > /tmp/new.crc
+modprobe --dump-modversions /lib/modules/$(uname -r)/kernel/drivers/net/wireless/ath/ath10k/ath10k_core.ko \
   | sort > /tmp/old.crc
-join -j1 /tmp/old.crc /tmp/new.crc | awk '$2!=$3'      # 空 = CRC 一致，能加载
-# vermagic 里必须有 6.12.95+ SMP ... aarch64，且没有 "gcc" 版本差异
+diff /tmp/old.crc /tmp/new.crc        # ★ 期望：**只有新增/无关行**，所有"同名符号的 CRC"必须一致
+join -j1 /tmp/old.crc /tmp/new.crc | awk '$2!=$3'      # 空 = 全部一致，能加载
+# vermagic 必须与设备一致：6.12.95+ SMP preempt ... aarch64
 
 # 1) 备份 + 替换
-cp -a /lib/modules/$(uname -r)/kernel/net/mac80211/mac80211.ko \
-      /root/fwbackup/mac80211.ko.orig
-cp 新-mac80211.ko /lib/modules/$(uname -r)/kernel/net/mac80211/mac80211.ko
+cp -a /lib/modules/$(uname -r)/kernel/drivers/net/wireless/ath/ath10k/ath10k_core.ko \
+      /root/fwbackup/ath10k_core.ko.orig
+cp 新-ath10k_core.ko /lib/modules/$(uname -r)/kernel/drivers/net/wireless/ath/ath10k/ath10k_core.ko
 depmod $(uname -r)
+# 再加开关（不想要参数开关就跳过这行）：echo 'options ath10k_core cryptmode=1' > /etc/modprobe.d/99-z17s-ath10k.conf
 
 # 2) 生效：直接 reboot。不要 rmmod 热卸（见 §2.5 止损）
 ```
@@ -148,11 +171,17 @@ depmod $(uname -r)
 
 ### 2.5 预期、风险与止损
 
-**如实说三条风险**：
+**如实说四条风险**：
 
-1. **不保证不再崩。** 崩溃是 modem 侧固件 assert（`EX:wlan_process:1:WLAN RT:1078`），`key_hw_accel` 只是**诱因**。软解绕过诱因，但固件可能还有别的方式炸。
+1. **不保证不再崩。** 崩溃是 modem 侧固件 assert（`EX:wlan_process:1:WLAN RT:1078`）。但现在机制已查清：**触发点就是 CCMP key 被下发进固件**（`set_key` → `ath10k_wmi_vdev_install_key`）。软解后固件手里不再有 key，**这个触发点被移除**；不过同一固件还有别的崩溃路径（作者已为它加过 `skip quiet mode for WCN3990` 之类的补丁），不能承诺 100%。
 2. **软解吃 CPU。** 骁龙 835 跑 WPA2 软解吞吐会明显下降。**但对这台机器的实际用途（SSH / 面板 / 同步）够用** —— 它不需要跑满带宽。
-3. **可能"连得上但数据不通"。** 如果固件在 `native` 模式下期望"帧已被硬件解密"，而 host 又软解一遍/或都没解，会出现"关联成功、ping 不通"。**这正是 §3.2 要先看清路径的原因。**
+3. **"连得上但数据不通"的风险已显著降低（源码已证）**：
+   - **TX 侧有配套机制**：`nohwcrypt` → `ATH10K_SKB_F_NO_HWCRYPT` → `HTT_DATA_TX_DESC_FLAGS0_NO_ENCRYPT`（`htt_tx.c:1317` / `1512`），明确告诉固件"这帧别加密"，**这条路不需要 `RAW_MODE`**。
+   - **RX 侧 host 不按 decap 模式分支**：`rx_decap_mode` 只用于给固件发 WMI 参数 + `wow.c`；解密标记来自固件上报的 enctype，而 `htt_rx.c:1998-2003` 的注释写得很清楚 —— 固件遇到"解不开的加密帧（缺 peer / key 无效）会**按 raw 上报**" ⇒ `RX_FLAG_DECRYPTED` 不置 ⇒ mac80211 自己软解。
+   - 且 snoc 是 `ATH10K_DEV_TYPE_LL`（`snoc.c:1366`），不走 HL 的 `rx_ind` 特殊路径。
+   - **剩下的唯一未知**：固件在"peer 没有 key"时，是**乖乖把加密帧上报**，还是**直接丢掉**（丢了 = 关联成功但 ping 不通）。只能上机验。
+4. 🆕 **补丁写错的失败形态很好认**（省一轮排查）：只改 `core.c` 不改 `mac.c:5726` ⇒ `dmesg` 出现
+   `cryptmode module param needed for sw crypto`，**vif 建不起来**（现象像"连不上/扫不到"）。
 
 🔴 **止损规则（原方案没写，但这是实测过的雷）**：
 
@@ -180,7 +209,16 @@ ping -c 5 <网关>                                    # ★ 必须 ping，不能
 journalctl -b | grep -c "fatal error: EX:wlan_process"   # 必须 0
 journalctl -b | grep -c "firmware crashed!"              # 必须 0
 uptime                                              # load 应 ~0.3，不是 1.9
+
+# —— 2026-09-25 新增：直接证明"软解真的生效了" ——
+dmesg | grep -c "cryptmode module param needed"      # 必须 0（≠0 = mac.c:5726 守卫没绕过）
+dmesg | grep -c "cryptmode > 0 requires raw mode"    # 必须 0（≠0 = core.c 补丁没生效）
+dmesg | grep "key_hw_accel" | tail -5                # ★ 期望出现 "key_hw_accel SW ok (drv ret=1)"
+dmesg | grep -c "set_key cmd="                       # ★ 期望 0：不再把 key 下发固件
 ```
+
+`key_hw_accel` 那 6 条 `pr_info` 这次终于派上用场：**`SW ok (drv ret=1)` = 驱动回退成功**；
+若看到 `SW denied by SW_CRYPTO_CONTROL` 说明 `SW_CRYPTO_CONTROL` 又被置上了（`mac.c:10103` 那段失效）。
 
 ⭐ **两条纪律**：
 
