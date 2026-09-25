@@ -1,0 +1,1098 @@
+[    0.000000] Booting Linux on physical CPU 0x0000000000 [0x51af8014]
+[    0.000000] Linux version 6.12.95+ (root@iMac) (aarch64-linux-gnu-gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, GNU ld (GNU Binutils for Ubuntu) 2.38) #1 SMP PREEMPT Sun Sep 20 03:29:51 UTC 2026
+[    0.000000] Machine model: Nubia Z17s
+[    0.000000] printk: debug: skip boot console de-registration.
+[    0.000000] [Firmware Bug]: Kernel image misaligned at boot, please fix your bootloader!
+[    0.000000] OF: reserved mem: 0x00000000bfffc000..0x00000000bfffffff (16 KiB) nomap non-reusable mpss-metadata
+[    0.000000] OF: reserved mem: 0x0000000086000000..0x00000000861fffff (2048 KiB) nomap non-reusable smem-mem@86000000
+[    0.000000] OF: reserved mem: 0x000000008ab00000..0x000000008b1fffff (7168 KiB) nomap non-reusable memory@8ab00000
+[    0.000000] OF: reserved mem: 0x000000008b200000..0x000000008cbfffff (26624 KiB) nomap non-reusable memory@8b200000
+[    0.000000] OF: reserved mem: 0x000000008cc00000..0x0000000093bfffff (114688 KiB) nomap non-reusable memory@8cc00000
+[    0.000000] OF: reserved mem: 0x0000000093c00000..0x00000000940fffff (5120 KiB) nomap non-reusable memory@93c00000
+[    0.000000] OF: reserved mem: 0x0000000094100000..0x00000000942fffff (2048 KiB) nomap non-reusable memory@94100000
+[    0.000000] OF: reserved mem: 0x0000000094300000..0x00000000951fffff (15360 KiB) nomap non-reusable memory@94300000
+[    0.000000] OF: reserved mem: 0x0000000095200000..0x00000000952fffff (1024 KiB) nomap non-reusable memory@95200000
+[    0.000000] OF: reserved mem: 0x0000000095600000..0x000000009560ffff (64 KiB) nomap non-reusable memory@95600000
+[    0.000000] OF: reserved mem: 0x0000000088f00000..0x00000000890fffff (2048 KiB) nomap non-reusable rmtfs_mem@88f00000
+[    0.000000] OF: reserved mem: 0x0000000095610000..0x0000000095614fff (20 KiB) nomap non-reusable memory@95610000
+[    0.000000] OF: reserved mem: 0x0000000095615000..0x0000000095714fff (1024 KiB) nomap non-reusable memory@95615000
+[    0.000000] OF: reserved mem: 0x0000000095715000..0x0000000095814fff (1024 KiB) nomap non-reusable memory@95715000
+[    0.000000] OF: reserved mem: 0x000000009d400000..0x000000009f7fffff (36864 KiB) nomap non-reusable memory@9d400000
+[    0.000000] OF: reserved mem: 0x00000000aff00000..0x00000000afffffff (1024 KiB) nomap non-reusable ramoops@aff00000
+[    0.000000] Reserved memory: created DMA memory pool at 0x00000000f7800000, size 0 MiB
+[    0.000000] OF: reserved mem: initialized node memory@f7800000, compatible id shared-dma-pool
+[    0.000000] OF: reserved mem: 0x00000000f7800000..0x00000000f7804fff (20 KiB) nomap non-reusable memory@f7800000
+[    0.000000] Reserved memory: created DMA memory pool at 0x00000000f7900000, size 0 MiB
+[    0.000000] OF: reserved mem: initialized node memory@f7900000, compatible id shared-dma-pool
+[    0.000000] OF: reserved mem: 0x00000000f7900000..0x00000000f7901fff (8 KiB) nomap non-reusable memory@f7900000
+[    0.000000] Zone ranges:
+[    0.000000]   DMA      [mem 0x0000000040000000-0x00000000ffffffff]
+[    0.000000]   DMA32    empty
+[    0.000000]   Normal   [mem 0x0000000100000000-0x00000001bd8bffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000040000000-0x0000000085ffffff]
+[    0.000000]   node   0: [mem 0x0000000086000000-0x00000000861fffff]
+[    0.000000]   node   0: [mem 0x0000000086200000-0x0000000088efffff]
+[    0.000000]   node   0: [mem 0x0000000088f00000-0x00000000890fffff]
+[    0.000000]   node   0: [mem 0x0000000089100000-0x000000008aafffff]
+[    0.000000]   node   0: [mem 0x000000008ab00000-0x00000000952fffff]
+[    0.000000]   node   0: [mem 0x0000000095300000-0x00000000955fffff]
+[    0.000000]   node   0: [mem 0x0000000095600000-0x0000000095814fff]
+[    0.000000]   node   0: [mem 0x0000000095815000-0x000000009d3fffff]
+[    0.000000]   node   0: [mem 0x000000009d400000-0x000000009f7fffff]
+[    0.000000]   node   0: [mem 0x000000009f800000-0x00000000afefffff]
+[    0.000000]   node   0: [mem 0x00000000aff00000-0x00000000afffffff]
+[    0.000000]   node   0: [mem 0x00000000b0000000-0x00000000bfffbfff]
+[    0.000000]   node   0: [mem 0x00000000bfffc000-0x00000000bfffffff]
+[    0.000000]   node   0: [mem 0x00000000c0000000-0x00000000f77fffff]
+[    0.000000]   node   0: [mem 0x00000000f7800000-0x00000000f7804fff]
+[    0.000000]   node   0: [mem 0x00000000f7805000-0x00000000f78fffff]
+[    0.000000]   node   0: [mem 0x00000000f7900000-0x00000000f7901fff]
+[    0.000000]   node   0: [mem 0x00000000f7902000-0x00000001bd8bffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000040000000-0x00000001bd8bffff]
+[    0.000000] On node 0, zone Normal: 10048 pages in unavailable ranges
+[    0.000000] psci: probing for conduit method from DT.
+[    0.000000] psci: PSCIv1.0 detected in firmware.
+[    0.000000] psci: Using standard PSCI v0.2 function IDs
+[    0.000000] psci: MIGRATE_INFO_TYPE not supported.
+[    0.000000] psci: SMC Calling Convention v1.0
+[    0.000000] psci: OSI mode supported.
+[    0.000000] psci: [Firmware Bug]: failed to set PC mode: -3
+[    0.000000] percpu: Embedded 25 pages/cpu s62424 r8192 d31784 u102400
+[    0.000000] pcpu-alloc: s62424 r8192 d31784 u102400 alloc=25*4096
+[    0.000000] pcpu-alloc: [0] 0 [0] 1 [0] 2 [0] 3 [0] 4 [0] 5 [0] 6 [0] 7 
+[    0.000000] Detected VIPT I-cache on CPU0
+[    0.000000] CPU features: detected: GIC system register CPU interface
+[    0.000000] CPU features: detected: Spectre-v4
+[    0.000000] CPU features: detected: ARM erratum 845719
+[    0.000000] alternatives: applying boot alternatives
+[    0.000000] Kernel command line: clk_ignore_unused loglevel=8 console=tty0 console=ttyGS0,115200n8 fbcon=map:0 no_console_suspend keep_bootcon panic_on_oops=0 panic=86400 nowatchdog deferred_probe_timeout=30 scsi_mod.scan=sync rootdelay=5 root=/dev/ram0 rw init=/init rdinit=/init androidboot.hardware=qcom androidboot.bootdevice=1da4000.ufshc swiotlb=2048 z17s.rootfs=userdata androidboot.veritymode=enforcing androidboot.verifiedbootstate=green androidboot.keymaster=1 androidboot.bootdevice=1da4000.ufshc androidboot.serialno=5d6dc569 nubia.isroot=1 nubia.fastbootrootcount=59 nubia.systemisroot=1 nubia.bootisroot=1 nubia.deviceisroot=1 androidboot.baseband=msm mdss_mdp.panel=1:dsi:0:qcom,mdss_dsi_jdi_nt35596s_1080x2040_video:1:none:cfg:single_dsi
+[    0.000000] Unknown kernel command line parameters "panic_on_oops=0", will be passed to user space.
+[    0.000000] Dentry cache hash table entries: 1048576 (order: 11, 8388608 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 524288 (order: 10, 4194304 bytes, linear)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 1562816
+[    0.000000] mem auto-init: stack:off, heap alloc:off, heap free:off
+[    0.000000] software IO TLB: area num 8.
+[    0.000000] software IO TLB: mapped [mem 0x00000000ffbff000-0x00000000fffff000] (4MB)
+[    0.000000] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=8, Nodes=1
+[    0.000000] rcu: Preemptible hierarchical RCU implementation.
+[    0.000000] 	Trampoline variant of Tasks RCU enabled.
+[    0.000000] 	Tracing variant of Tasks RCU enabled.
+[    0.000000] rcu: RCU calculated value of scheduler-enlistment delay is 100 jiffies.
+[    0.000000] RCU Tasks: Setting shift to 3 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=8.
+[    0.000000] RCU Tasks Trace: Setting shift to 3 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=8.
+[    0.000000] NR_IRQS: 64, nr_irqs: 64, preallocated irqs: 0
+[    0.000000] GICv3: 608 SPIs implemented
+[    0.000000] GICv3: 0 Extended SPIs implemented
+[    0.000000] Root IRQ handler: gic_handle_irq
+[    0.000000] GICv3: GICv3 features: 16 PPIs
+[    0.000000] GICv3: GICD_CTRL.DS=0, SCR_EL3.FIQ=1
+[    0.000000] GICv3: CPU0: found redistributor 0 region 0:0x0000000017b00000
+[    0.000000] ITS: No ITS available, not enabling LPIs
+[    0.000000] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[    0.000000] arch_timer: cp15 and mmio timer(s) running at 19.20MHz (virt/virt).
+[    0.000000] clocksource: arch_sys_counter: mask: 0xffffffffffffff max_cycles: 0x46d987e47, max_idle_ns: 440795202767 ns
+[    0.000000] sched_clock: 56 bits at 19MHz, resolution 52ns, wraps every 4398046511078ns
+[    0.000116] Console: colour dummy device 80x25
+[    0.000124] printk: legacy console [tty0] enabled
+[    0.000796] Calibrating delay loop (skipped), value calculated using timer frequency.. 38.40 BogoMIPS (lpj=19200)
+[    0.000815] pid_max: default: 32768 minimum: 301
+[    0.000876] LSM: initializing lsm=capability
+[    0.000977] Mount-cache hash table entries: 16384 (order: 5, 131072 bytes, linear)
+[    0.001008] Mountpoint-cache hash table entries: 16384 (order: 5, 131072 bytes, linear)
+[    0.002475] rcu: Hierarchical SRCU implementation.
+[    0.002488] rcu: 	Max phase no-delay instances is 400.
+[    0.002618] Timer migration: 1 hierarchy levels; 8 children per group; 1 crossnode level
+[    0.003008] smp: Bringing up secondary CPUs ...
+[    0.004536] Detected VIPT I-cache on CPU1
+[    0.004589] GICv3: CPU1: found redistributor 1 region 0:0x0000000017b20000
+[    0.004650] CPU1: Booted secondary processor 0x0000000001 [0x51af8014]
+[    0.006103] Detected VIPT I-cache on CPU2
+[    0.006142] GICv3: CPU2: found redistributor 2 region 0:0x0000000017b40000
+[    0.006193] CPU2: Booted secondary processor 0x0000000002 [0x51af8014]
+[    0.007617] Detected VIPT I-cache on CPU3
+[    0.007660] GICv3: CPU3: found redistributor 3 region 0:0x0000000017b60000
+[    0.007710] CPU3: Booted secondary processor 0x0000000003 [0x51af8014]
+[    0.009430] CPU features: detected: Spectre-v2
+[    0.009456] CPU features: detected: Spectre-BHB
+[    0.009475] Detected VIPT I-cache on CPU4
+[    0.009616] GICv3: CPU4: found redistributor 100 region 0:0x0000000017b80000
+[    0.009708] CPU4: Booted secondary processor 0x0000000100 [0x51af8001]
+[    0.011411] Detected VIPT I-cache on CPU5
+[    0.011556] GICv3: CPU5: found redistributor 101 region 0:0x0000000017ba0000
+[    0.011643] CPU5: Booted secondary processor 0x0000000101 [0x51af8001]
+[    0.013355] Detected VIPT I-cache on CPU6
+[    0.013511] GICv3: CPU6: found redistributor 102 region 0:0x0000000017bc0000
+[    0.013599] CPU6: Booted secondary processor 0x0000000102 [0x51af8001]
+[    0.015289] Detected VIPT I-cache on CPU7
+[    0.015451] GICv3: CPU7: found redistributor 103 region 0:0x0000000017be0000
+[    0.015540] CPU7: Booted secondary processor 0x0000000103 [0x51af8001]
+[    0.015751] smp: Brought up 1 node, 8 CPUs
+[    0.015898] SMP: Total of 8 processors activated.
+[    0.015907] CPU: All CPU(s) started at EL1
+[    0.015916] CPU features: detected: 32-bit EL0 Support
+[    0.015925] CPU features: detected: CRC32 instructions
+[    0.016009] alternatives: applying system-wide alternatives
+[    0.016926] Memory: 5867288K/6251264K available (8896K kernel code, 1186K rwdata, 3212K rodata, 2240K init, 418K bss, 378464K reserved, 0K cma-reserved)
+[    0.018521] devtmpfs: initialized
+[    0.026603] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1911260446275000 ns
+[    0.026633] futex hash table entries: 2048 (order: 5, 131072 bytes, linear)
+[    0.026747] 28720 pages in range for non-PLT usage
+[    0.026751] 520240 pages in range for PLT usage
+[    0.026799] pinctrl core: initialized pinctrl subsystem
+[    0.029478] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.030150] DMA: preallocated 1024 KiB GFP_KERNEL pool for atomic allocations
+[    0.030311] DMA: preallocated 1024 KiB GFP_KERNEL|GFP_DMA pool for atomic allocations
+[    0.030464] DMA: preallocated 1024 KiB GFP_KERNEL|GFP_DMA32 pool for atomic allocations
+[    0.030497] audit: initializing netlink subsys (disabled)
+[    0.030618] audit: type=2000 audit(0.030:1): state=initialized audit_enabled=0 res=1
+[    0.030821] thermal_sys: Registered thermal governor 'step_wise'
+[    0.030827] thermal_sys: Registered thermal governor 'power_allocator'
+[    0.030897] cpuidle: using governor menu
+[    0.031059] hw-breakpoint: found 6 breakpoint and 4 watchpoint registers.
+[    0.031276] ASID allocator initialised with 65536 entries
+[    0.037743] /soc@0/ufshc@1da4000: Fixed dependency cycle(s) with /soc@0/phy@1da7000
+[    0.037779] /soc@0/phy@1da7000: Fixed dependency cycle(s) with /soc@0/ufshc@1da4000
+[    0.038024] /soc@0/clock-controller@c8c0000: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/phy@c994400
+[    0.038110] /soc@0/display-subsystem@c900000/display-controller@c901000: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/dsi@c994000
+[    0.038171] /soc@0/display-subsystem@c900000/dsi@c994000: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/dsi@c994000/panel@0
+[    0.038217] /soc@0/display-subsystem@c900000/dsi@c994000: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/display-controller@c901000
+[    0.038333] /soc@0/display-subsystem@c900000/dsi@c994000/panel@0: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/dsi@c994000
+[    0.038376] /soc@0/display-subsystem@c900000/phy@c994400: Fixed dependency cycle(s) with /soc@0/clock-controller@c8c0000
+[    0.038427] /soc@0/interrupt-controller@17a00000: Fixed dependency cycle(s) with /soc@0/interrupt-controller@17a00000
+[    0.039866] /soc@0/ufshc@1da4000: Fixed dependency cycle(s) with /soc@0/phy@1da7000
+[    0.039979] /soc@0/ufshc@1da4000: Fixed dependency cycle(s) with /soc@0/phy@1da7000
+[    0.040040] /soc@0/phy@1da7000: Fixed dependency cycle(s) with /soc@0/ufshc@1da4000
+[    0.043674] /soc@0/clock-controller@c8c0000: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/phy@c994400
+[    0.043875] /soc@0/display-subsystem@c900000: Fixed dependency cycle(s) with /soc@0/interconnect@1744000
+[    0.043934] /soc@0/display-subsystem@c900000: Fixed dependency cycle(s) with /soc@0/clock-controller@c8c0000
+[    0.044066] /soc@0/display-subsystem@c900000/display-controller@c901000: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/dsi@c994000
+[    0.044142] /soc@0/display-subsystem@c900000/dsi@c994000: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/dsi@c994000/panel@0
+[    0.044205] /soc@0/display-subsystem@c900000/dsi@c994000: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/display-controller@c901000
+[    0.044372] /soc@0/display-subsystem@c900000/dsi@c994000/panel@0: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/dsi@c994000
+[    0.044447] /soc@0/display-subsystem@c900000/phy@c994400: Fixed dependency cycle(s) with /soc@0/clock-controller@c8c0000
+[    0.046526] HugeTLB: registered 1.00 GiB page size, pre-allocated 0 pages
+[    0.046540] HugeTLB: 0 KiB vmemmap can be freed for a 1.00 GiB page
+[    0.046562] HugeTLB: registered 32.0 MiB page size, pre-allocated 0 pages
+[    0.046572] HugeTLB: 0 KiB vmemmap can be freed for a 32.0 MiB page
+[    0.046583] HugeTLB: registered 2.00 MiB page size, pre-allocated 0 pages
+[    0.046592] HugeTLB: 0 KiB vmemmap can be freed for a 2.00 MiB page
+[    0.046603] HugeTLB: registered 64.0 KiB page size, pre-allocated 0 pages
+[    0.046612] HugeTLB: 0 KiB vmemmap can be freed for a 64.0 KiB page
+[    0.047800] iommu: Default domain type: Translated
+[    0.047812] iommu: DMA domain TLB invalidation policy: strict mode
+[    0.048610] SCSI subsystem initialized
+[    0.048678] pps_core: LinuxPPS API ver. 1 registered
+[    0.048688] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.048707] PTP clock support registered
+[    0.048792] qcom_scm: convention: smc arm 64
+[    0.051818] clocksource: Switched to clocksource arch_sys_counter
+[    0.052039] VFS: Disk quotas dquot_6.6.0
+[    0.052086] VFS: Dquot-cache hash table entries: 512 (order 0, 4096 bytes)
+[    0.060718] NET: Registered PF_INET protocol family
+[    0.060920] IP idents hash table entries: 131072 (order: 8, 1048576 bytes, linear)
+[    0.064982] tcp_listen_portaddr_hash hash table entries: 4096 (order: 4, 65536 bytes, linear)
+[    0.065121] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.065146] TCP established hash table entries: 65536 (order: 7, 524288 bytes, linear)
+[    0.065473] TCP bind hash table entries: 65536 (order: 9, 2097152 bytes, linear)
+[    0.066837] TCP: Hash tables configured (established 65536 bind 65536)
+[    0.066951] UDP hash table entries: 4096 (order: 5, 131072 bytes, linear)
+[    0.067072] UDP-Lite hash table entries: 4096 (order: 5, 131072 bytes, linear)
+[    0.067296] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.067475] Unpacking initramfs...
+[    0.067752] s3: Bringing 0uV into 1352000-1352000uV
+[    0.067888] bob: Bringing 0uV into 3312000-3312000uV
+[    0.067936] s4: Bringing 0uV into 1800000-1800000uV
+[    0.068063] s5: Bringing 0uV into 1904000-1904000uV
+[    0.068203] s7: Bringing 0uV into 900000-900000uV
+[    0.068332] l1: Bringing 0uV into 880000-880000uV
+[    0.068472] l2: Bringing 0uV into 1200000-1200000uV
+[    0.068620] l3: Bringing 0uV into 1000000-1000000uV
+[    0.068744] l5: Bringing 0uV into 800000-800000uV
+[    0.068919] l6: Bringing 0uV into 1800000-1800000uV
+[    0.069066] l7: Bringing 0uV into 1800000-1800000uV
+[    0.069192] l8: Bringing 0uV into 1200000-1200000uV
+[    0.069329] l9: Bringing 0uV into 1808000-1808000uV
+[    0.069476] l10: Bringing 0uV into 1808000-1808000uV
+[    0.069606] l11: Bringing 0uV into 1000000-1000000uV
+[    0.069749] l12: Bringing 0uV into 1800000-1800000uV
+[    0.069907] l13: Bringing 0uV into 1808000-1808000uV
+[    0.070044] l14: Bringing 0uV into 1800000-1800000uV
+[    0.070187] l15: Bringing 0uV into 1800000-1800000uV
+[    0.070320] l16: Bringing 0uV into 2704000-2704000uV
+[    0.070457] l17: Bringing 0uV into 1304000-1304000uV
+[    0.070608] l18: Bringing 0uV into 2704000-2704000uV
+[    0.070746] l19: Bringing 0uV into 3008000-3008000uV
+[    0.070924] l20: Bringing 0uV into 2960000-2960000uV
+[    0.071101] l21: Bringing 0uV into 2960000-2960000uV
+[    0.071268] l22: Bringing 0uV into 2864000-2864000uV
+[    0.071431] l23: Bringing 0uV into 3312000-3312000uV
+[    0.071587] l24: Bringing 0uV into 3088000-3088000uV
+[    0.071740] l25: Bringing 0uV into 3104000-3104000uV
+[    0.071933] l26: Bringing 0uV into 1200000-1200000uV
+[    0.072041] Initialise system trusted keyrings
+[    0.072097] l28: Bringing 0uV into 3008000-3008000uV
+[    0.072250] workingset: timestamp_bits=46 max_order=21 bucket_order=0
+[    0.072717] Key type asymmetric registered
+[    0.072737] Asymmetric key parser 'x509' registered
+[    0.072778] Block layer SCSI generic (bsg) driver version 0.4 loaded (major 248)
+[    0.072994] io scheduler mq-deadline registered
+[    0.073006] io scheduler kyber registered
+[    0.073027] io scheduler bfq registered
+[    0.076583] simple-framebuffer 9d400000.framebuffer: framebuffer at 0x9d400000, 0x2400000 bytes
+[    0.076619] simple-framebuffer 9d400000.framebuffer: format=a8r8g8b8, mode=1080x2040x32, linelength=4320
+[    0.084746] Console: switching to colour frame buffer device 135x127
+[    0.101502] simple-framebuffer 9d400000.framebuffer: fb0: simplefb registered!
+[    0.108640] msm_serial: driver initialized
+[    0.110185] arm-smmu 1680000.iommu: probing hardware configuration...
+[    0.110320] arm-smmu 1680000.iommu: SMMUv2 with:
+[    0.110443] arm-smmu 1680000.iommu: 	stage 1 translation
+[    0.110547] arm-smmu 1680000.iommu: 	address translation ops
+[    0.110654] arm-smmu 1680000.iommu: 	non-coherent table walk
+[    0.110762] arm-smmu 1680000.iommu: 	(IDR0.CTTW overridden by FW configuration)
+[    0.110916] arm-smmu 1680000.iommu: 	stream matching with 16 register groups
+[    0.111068] arm-smmu 1680000.iommu: 	6 context banks (0 stage-2 only)
+[    0.111470] arm-smmu 1680000.iommu: 	Supported page sizes: 0x63315000
+[    0.111595] arm-smmu 1680000.iommu: 	Stage-1: 36-bit VA -> 36-bit IPA
+[    0.111952] arm-smmu 1680000.iommu: 	preserved 0 boot mappings
+[    0.113858] arm-smmu 16c0000.iommu: probing hardware configuration...
+[    0.113991] arm-smmu 16c0000.iommu: SMMUv2 with:
+[    0.114105] arm-smmu 16c0000.iommu: 	stage 1 translation
+[    0.114208] arm-smmu 16c0000.iommu: 	address translation ops
+[    0.114314] arm-smmu 16c0000.iommu: 	non-coherent table walk
+[    0.114421] arm-smmu 16c0000.iommu: 	(IDR0.CTTW overridden by FW configuration)
+[    0.114553] arm-smmu 16c0000.iommu: 	stream matching with 14 register groups
+[    0.114701] arm-smmu 16c0000.iommu: 	10 context banks (0 stage-2 only)
+[    0.114919] Freeing initrd memory: 29872K
+[    0.115063] arm-smmu 16c0000.iommu: 	Supported page sizes: 0x63315000
+[    0.115189] arm-smmu 16c0000.iommu: 	Stage-1: 36-bit VA -> 36-bit IPA
+[    0.115505] arm-smmu 16c0000.iommu: 	preserved 0 boot mappings
+[    0.122230] spmi_pmic_arb 800f000.spmi: PMIC arbiter version v3 (0x30000000)
+[    0.126784] s1: Bringing 752000uV into 988000-988000uV
+[    0.140934] UDC core: g_multi: couldn't find an available UDC
+[    0.141499] i2c_dev: i2c /dev entries driver
+[    0.143692] input: pm8941_pwrkey as /devices/platform/soc@0/800f000.spmi/spmi-0/0-00/800f000.spmi:pmic@0:pon@800/800f000.spmi:pmic@0:pon@800:pwrkey/input/input0
+[    0.145405] input: pm8941_resin as /devices/platform/soc@0/800f000.spmi/spmi-0/0-00/800f000.spmi:pmic@0:pon@800/800f000.spmi:pmic@0:pon@800:resin/input/input1
+[    0.159237] hid: raw HID events driver (C) Jiri Kosina
+[    0.166863] NET: Registered PF_PACKET protocol family
+[    0.178305] Loading compiled-in X.509 certificates
+[    0.271427] msm_serial c171000.serial: msm_serial: detected port #0
+[    0.271677] msm_serial c171000.serial: uartclk = 19200000
+[    0.272534] c171000.serial: ttyMSM0 at MMIO 0xc171000 (irq = 48, base_baud = 1200000) is a MSM
+[    0.273219] serial serial0: tty port ttyMSM0 registered
+[    0.274256] msm_serial c1b0000.serial: msm_serial: detected port #1
+[    0.274474] msm_serial c1b0000.serial: uartclk = 1843200
+[    0.275386] c1b0000.serial: ttyMSM1 at MMIO 0xc1b0000 (irq = 49, base_baud = 115200) is a MSM
+[    0.277637] arm-smmu 5040000.iommu: probing hardware configuration...
+[    0.277782] arm-smmu 5040000.iommu: SMMUv2 with:
+[    0.278095] arm-smmu 5040000.iommu: 	stage 1 translation
+[    0.278202] arm-smmu 5040000.iommu: 	address translation ops
+[    0.278311] arm-smmu 5040000.iommu: 	non-coherent table walk
+[    0.278419] arm-smmu 5040000.iommu: 	(IDR0.CTTW overridden by FW configuration)
+[    0.278550] arm-smmu 5040000.iommu: 	stream matching with 3 register groups
+[    0.278694] arm-smmu 5040000.iommu: 	3 context banks (0 stage-2 only)
+[    0.279024] arm-smmu 5040000.iommu: 	Supported page sizes: 0x63315000
+[    0.279150] arm-smmu 5040000.iommu: 	Stage-1: 48-bit VA -> 36-bit IPA
+[    0.279520] arm-smmu 5040000.iommu: 	preserved 0 boot mappings
+[    0.282988] arm-smmu 5100000.iommu: probing hardware configuration...
+[    0.283223] arm-smmu 5100000.iommu: SMMUv2 with:
+[    0.283358] arm-smmu 5100000.iommu: 	stage 1 translation
+[    0.283467] arm-smmu 5100000.iommu: 	address translation ops
+[    0.283578] arm-smmu 5100000.iommu: 	non-coherent table walk
+[    0.283691] arm-smmu 5100000.iommu: 	(IDR0.CTTW overridden by FW configuration)
+[    0.283895] arm-smmu 5100000.iommu: 	stream matching with 12 register groups
+[    0.284061] arm-smmu 5100000.iommu: 	13 context banks (0 stage-2 only)
+[    0.284381] arm-smmu 5100000.iommu: 	Supported page sizes: 0x63315000
+[    0.284505] arm-smmu 5100000.iommu: 	Stage-1: 36-bit VA -> 36-bit IPA
+[    0.284956] arm-smmu 5100000.iommu: 	preserved 0 boot mappings
+[    0.288607] arm-smmu cd00000.iommu: probing hardware configuration...
+[    0.288751] arm-smmu cd00000.iommu: SMMUv2 with:
+[    0.288891] arm-smmu cd00000.iommu: 	stage 1 translation
+[    0.289000] arm-smmu cd00000.iommu: 	address translation ops
+[    0.289108] arm-smmu cd00000.iommu: 	non-coherent table walk
+[    0.289216] arm-smmu cd00000.iommu: 	(IDR0.CTTW overridden by FW configuration)
+[    0.289347] arm-smmu cd00000.iommu: 	stream matching with 54 register groups
+[    0.289505] arm-smmu cd00000.iommu: 	17 context banks (0 stage-2 only)
+[    0.290394] arm-smmu cd00000.iommu: 	Supported page sizes: 0x63315000
+[    0.290517] arm-smmu cd00000.iommu: 	Stage-1: 32-bit VA -> 36-bit IPA
+[    0.290917] arm-smmu cd00000.iommu: 	preserved 0 boot mappings
+[    0.295882] adreno 5000000.gpu: Adding to iommu group 0
+[    0.297923] spmi spmi-0: cleanup_irq apid=76 sid=0x3 per=0xd8 irq=1
+[    0.297991] irq 34, desc: (____ptrval____), depth: 0, count: 0, unhandled: 0
+[    0.298041] ->handle_irq():  (____ptrval____), pmic_arb_chained_irq+0x0/0x338
+[    0.298096] ->irq_data.chip(): (____ptrval____), 0xffff800080f3f9f8
+[    0.298141] ->action(): (____ptrval____)
+[    0.298170] ->action->handler(): (____ptrval____), bad_chained_irq+0x0/0x44
+[    0.298224]      IRQ_LEVEL set
+[    0.298250]    IRQ_NOPROBE set
+[    0.298274]  IRQ_NOREQUEST set
+[    0.298298]   IRQ_NOTHREAD set
+[    0.312595] printk: legacy console [ttyGS0] enabled
+[    0.314432] Mass Storage Function, version: 2009/09/11
+[    0.314541] LUN: removable file: (no medium)
+[    0.314655] no file given for LUN0
+[    0.314742] printk: legacy console [ttyGS0] disabled
+[    0.319863] udc a800000.usb: failed to start g_multi: -22
+[    0.319995] g_multi gadget.0: probe with driver g_multi failed with error -22
+[    0.335755] scsi host0: ufshcd
+[    0.375255] msm-mdss c900000.display-subsystem: Adding to iommu group 1
+[    0.378573] /soc@0/display-subsystem@c900000/display-controller@c901000: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/dsi@c994000
+[    0.380947] /soc@0/display-subsystem@c900000/display-controller@c901000: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/dsi@c994000
+[    0.381428] /soc@0/display-subsystem@c900000/dsi@c994000: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/dsi@c994000/panel@0
+[    0.390280] /soc@0/display-subsystem@c900000/dsi@c994000: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/display-controller@c901000
+[    0.409190] /soc@0/display-subsystem@c900000/dsi@c994000/panel@0: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/dsi@c994000
+[    0.440584] /soc@0/display-subsystem@c900000/dsi@c994000: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/dsi@c994000/panel@0
+[    0.459155] /soc@0/display-subsystem@c900000/dsi@c994000/panel@0: Fixed dependency cycle(s) with /soc@0/display-subsystem@c900000/dsi@c994000
+[    0.474374] scsi 0:0:0:49488: Well-known LUN    SAMSUNG  KLUCG4J1ED-B0C1  0200 PQ: 0 ANSI: 6
+[    0.480209] msm_dpu c901000.display-controller: bound c994000.dsi (ops 0xffff800080a294d8)
+[    0.493042] scsi 0:0:0:49476: Well-known LUN    SAMSUNG  KLUCG4J1ED-B0C1  0200 PQ: 0 ANSI: 6
+[    0.498321] adreno 5000000.gpu: supply vdd not found, using dummy regulator
+[    0.511161] scsi 0:0:0:49456: Well-known LUN    SAMSUNG  KLUCG4J1ED-B0C1  0200 PQ: 0 ANSI: 6
+[    0.516692] adreno 5000000.gpu: supply vddcx not found, using dummy regulator
+[    0.531212] scsi 0:0:0:0: Direct-Access     SAMSUNG  KLUCG4J1ED-B0C1  0200 PQ: 0 ANSI: 6
+[    0.542698] msm_dpu c901000.display-controller: bound 5000000.gpu (ops 0xffff800080a04718)
+[    0.550414] sd 0:0:0:0: [sda] 15273984 4096-byte logical blocks: (62.6 GB/58.3 GiB)
+[    0.555552] scsi 0:0:0:1: Direct-Access     SAMSUNG  KLUCG4J1ED-B0C1  0200 PQ: 0 ANSI: 6
+[    0.559241] sd 0:0:0:0: [sda] Write Protect is off
+[    0.572792] sd 0:0:0:0: [sda] Mode Sense: 00 32 00 10
+[    0.572921] Console: switching to colour dummy device 80x25
+[    0.572986] sd 0:0:0:0: [sda] Write cache: enabled, read cache: enabled, supports DPO and FUA
+[    0.573183] sd 0:0:0:0: [sda] Preferred minimum I/O size 8192 bytes
+[    0.573197] sd 0:0:0:0: [sda] Optimal transfer size 8192 bytes
+[    0.576299] [drm:dpu_kms_hw_init:1108] dpu hardware revision:0x30000000
+[    0.576772] scsi 0:0:0:2: Direct-Access     SAMSUNG  KLUCG4J1ED-B0C1  0200 PQ: 0 ANSI: 6
+[    0.577135] sd 0:0:0:1: [sdb] 1024 4096-byte logical blocks: (4.19 MB/4.00 MiB)
+[    0.577421] sd 0:0:0:1: [sdb] Write Protect is off
+[    0.577466] sd 0:0:0:1: [sdb] Mode Sense: 00 32 00 10
+[    0.577991] sd 0:0:0:1: [sdb] Write cache: enabled, read cache: enabled, supports DPO and FUA
+[    0.578246] sd 0:0:0:1: [sdb] Preferred minimum I/O size 8192 bytes
+[    0.578290] sd 0:0:0:1: [sdb] Optimal transfer size 8192 bytes
+[    0.579385] sd 0:0:0:2: [sdc] 1024 4096-byte logical blocks: (4.19 MB/4.00 MiB)
+[    0.579458] sd 0:0:0:2: [sdc] Write Protect is off
+[    0.579471] sd 0:0:0:2: [sdc] Mode Sense: 00 32 00 10
+[    0.579579] sd 0:0:0:2: [sdc] Write cache: enabled, read cache: enabled, supports DPO and FUA
+[    0.579636] sd 0:0:0:2: [sdc] Preferred minimum I/O size 8192 bytes
+[    0.579650] sd 0:0:0:2: [sdc] Optimal transfer size 8192 bytes
+[    0.579674] scsi 0:0:0:3: Direct-Access     SAMSUNG  KLUCG4J1ED-B0C1  0200 PQ: 0 ANSI: 6
+[    0.581258] [drm] Initialized msm 1.12.0 for c901000.display-controller on minor 0
+[    0.582447] sd 0:0:0:3: [sdd] 32768 4096-byte logical blocks: (134 MB/128 MiB)
+[    0.582461] scsi 0:0:0:4: Direct-Access     SAMSUNG  KLUCG4J1ED-B0C1  0200 PQ: 0 ANSI: 6
+[    0.582594] sd 0:0:0:3: [sdd] Write Protect is off
+[    0.582638] sd 0:0:0:3: [sdd] Mode Sense: 00 32 00 10
+[    0.582768] msm_dpu c901000.display-controller: [drm:adreno_request_fw] loaded qcom/a530_pm4.fw from new location
+[    0.582872] sd 0:0:0:3: [sdd] Write cache: enabled, read cache: enabled, supports DPO and FUA
+[    0.583019] sd 0:0:0:3: [sdd] Preferred minimum I/O size 8192 bytes
+[    0.583061] sd 0:0:0:3: [sdd] Optimal transfer size 8192 bytes
+[    0.584040] msm_dpu c901000.display-controller: [drm:adreno_request_fw] loaded qcom/a530_pfp.fw from new location
+[    0.584967] msm_dpu c901000.display-controller: [drm:adreno_request_fw] loaded qcom/a540_gpmu.fw2 from new location
+[    0.584991] sd 0:0:0:4: [sde] 262144 4096-byte logical blocks: (1.07 GB/1.00 GiB)
+[    0.585051] sd 0:0:0:4: [sde] Write Protect is off
+[    0.585079] sd 0:0:0:4: [sde] Mode Sense: 00 32 00 10
+[    0.585180] sd 0:0:0:4: [sde] Write cache: enabled, read cache: enabled, supports DPO and FUA
+[    0.585236] sd 0:0:0:4: [sde] Preferred minimum I/O size 8192 bytes
+[    0.585249] sd 0:0:0:4: [sde] Optimal transfer size 8192 bytes
+[    0.585429] scsi 0:0:0:5: Direct-Access     SAMSUNG  KLUCG4J1ED-B0C1  0200 PQ: 0 ANSI: 6
+[    0.588291] sd 0:0:0:5: [sdf] 51200 4096-byte logical blocks: (210 MB/200 MiB)
+[    0.588386] sd 0:0:0:5: [sdf] Write Protect is off
+[    0.588398] sd 0:0:0:5: [sdf] Mode Sense: 00 32 00 10
+[    0.588502] sd 0:0:0:5: [sdf] Write cache: enabled, read cache: enabled, supports DPO and FUA
+[    0.588557] sd 0:0:0:5: [sdf] Preferred minimum I/O size 8192 bytes
+[    0.588570] sd 0:0:0:5: [sdf] Optimal transfer size 8192 bytes
+[    0.598935]  sda: sda1 sda2 sda3 sda4 sda5 sda6 sda7 sda8 sda9 sda10
+[    0.599058]  sdc: sdc1
+[    0.599273] sd 0:0:0:2: [sdc] Attached SCSI disk
+[    0.600189]  sdb: sdb1
+[    0.600360] sd 0:0:0:0: [sda] Attached SCSI disk
+[    0.600695] sd 0:0:0:1: [sdb] Attached SCSI disk
+[    0.602732]  sdf: sdf1 sdf2 sdf3 sdf4
+[    0.603501]  sde: sde1 sde2 sde3 sde4 sde5 sde6 sde7 sde8 sde9 sde10 sde11 sde12 sde13 sde14 sde15 sde16 sde17 sde18 sde19 sde20 sde21 sde22 sde23 sde24 sde25 sde26 sde27 sde28 sde29 sde30 sde31 sde32 sde33 sde34 sde35 sde36 sde37 sde38 sde39 sde40 sde41
+[    0.603533]  sdd: sdd1 sdd2
+[    0.603681] sd 0:0:0:5: [sdf] Attached SCSI disk
+[    0.604378] sd 0:0:0:3: [sdd] Attached SCSI disk
+[    0.607583] sd 0:0:0:4: [sde] Attached SCSI disk
+[    0.623295] debugfs: File 'pfp' in directory 'c901000.display-controller' already present!
+[    0.623449] debugfs: File 'me' in directory 'c901000.display-controller' already present!
+[    0.623505] debugfs: File 'meq' in directory 'c901000.display-controller' already present!
+[    0.623558] debugfs: File 'roq' in directory 'c901000.display-controller' already present!
+[    0.623602] debugfs: File 'reset' in directory 'c901000.display-controller' already present!
+[    0.655381] msm_dsi_phy c994400.phy: NX595J scanout13 PHY timing=00 1d 08 09 23 22 07 07 05 03 04 00
+[    0.655453] msm_dsi_phy c994400.phy: NX595J scanout14 applied downstream PHY timing, clk-pre/post=29/07
+[    1.530972] fb0: Framebuffer is not in virtual address space.
+[    1.531163] fb0: Framebuffer is not in virtual address space.
+[    1.587003] Console: switching to colour frame buffer device 135x127
+[    1.621182] msm_dpu c901000.display-controller: [drm] fb0: msmdrmfb frame buffer device
+[    1.625123] input: Volume buttons as /devices/platform/gpio-keys/input/input2
+[    1.626106] input: Hall effect sensor as /devices/platform/gpio-hall-sensor/input/input3
+[    1.626773] clk: Not disabling unused clocks
+[    1.626932] PM: genpd: Disabling unused power domains
+[    1.632925] Freeing unused kernel memory: 2240K
+[    1.633365] Run /init as init process
+[    1.633491]   with arguments:
+[    1.633590]     /init
+[    1.633672]   with environment:
+[    1.633766]     HOME=/
+[    1.633871]     TERM=linux
+[    1.633961]     panic_on_oops=0
+[    1.721421] Z17S_INIT FW_PERMISSIVE entry
+[    1.724188] Z17S_INIT cmdline_fw=
+[    1.752036] Z17S_INIT suppliers= supplier:phy:phy-1da7000.phy.0 supplier:platform:100000.clock-controller supplier:platform:remoteproc:glink-edge supplier:platform:ufs-hba-regulator supplier:regulator:regulator.27 supplier:regulator:regulator.3 supplier:regulator:regulator.33 supplier:regulator:regulator.6
+[    1.766456] Z17S_INIT dep 100000.clock-controller drv=gcc-msm8998
+[    1.776006] Z17S_INIT dep 1da7000.phy drv=qcom-qmp-ufs-phy
+[    1.785025] Z17S_INIT dep ufs-hba-regulator drv=reg-fixed-voltage
+[    1.791526] Z17S_INIT ufs_drv=ufshcd-qcom
+[    1.798210] Z17S_INIT scsi_host=host0 
+[    1.804332] Z17S_INIT blocks=sda sdb sdc sdd sde sdf 
+[    1.833758] Z17S_INIT suppliers= supplier:phy:phy-1da7000.phy.0 supplier:platform:100000.clock-controller supplier:platform:remoteproc:glink-edge supplier:platform:ufs-hba-regulator supplier:regulator:regulator.27 supplier:regulator:regulator.3 supplier:regulator:regulator.33 supplier:regulator:regulator.6
+[    1.868130] Z17S_INIT FAST_PATH
+[    1.871696] Z17S_INIT ROOTFS_PART=userdata
+[    1.886016] Z17S_INIT UFS_DEV=/dev/sda10
+[    1.902107] EXT4-fs (sda10): mounted filesystem 5bc3c90a-bf04-4521-884a-6e822d0dbf7d r/w with ordered data mode. Quota mode: none.
+[    1.905910] Z17S_INIT DRM_MOD copy modules to rootfs
+[    2.488134] Z17S_INIT DRM_MOD copy_fail cp: can't create '/rootfs/lib/modules/./6.12.95+/build': File exists
+[    2.488473] Z17S_INIT GPU_FW copy to rootfs
+[    2.636701] Z17S_INIT GPU_FW copy_ok
+[    2.636999] Z17S_INIT BT_FW copy to rootfs
+[    2.643824] Z17S_INIT BT_FW copy_ok
+[    2.644124] Z17S_INIT TAS2555_FW copy to rootfs
+[    2.660324] Z17S_INIT TAS2555_FW copy_ok
+[    2.671855] Z17S_INIT AUDIO_TOOLS copy to rootfs
+[    2.817928] Z17S_INIT AUDIO_TOOLS copy_ok
+[    2.819309] Z17S_INIT switch_root
+[    2.946284] systemd[1]: System time advanced to timestamp on /var/lib/systemd/timesync/clock: Fri 2026-09-25 22:45:04 CST
+[    2.952047] systemd[1]: Failed to find module 'autofs4'
+[    2.984166] NET: Registered PF_INET6 protocol family
+[    2.988519] Segment Routing with IPv6
+[    2.988953] In-situ OAM (IOAM) with IPv6
+[    3.050167] systemd[1]: systemd 257.13-1~deb13u1 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +IPE +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBCRYPTSETUP_PLUGINS +LIBFDISK +PCRE2 +PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD +BPF_FRAMEWORK +BTF -XKBCOMMON -UTMP +SYSVINIT +LIBARCHIVE)
+[    3.050857] systemd[1]: Detected architecture arm64.
+[    3.057428] systemd[1]: Hostname set to <nx595j-debian13>.
+[    3.636440] systemd[1]: bpf-restrict-fs: BPF LSM hook not enabled in the kernel, BPF LSM not supported.
+[    4.382975] systemd[1]: /etc/systemd/system/z17s-grow-rootfs.service:5: Unknown key 'ConditionPathIsExecutable' in section [Unit], ignoring.
+[    4.476242] systemd[1]: /etc/systemd/system/1panel-core.service:12: Unknown key 'StartLimitIntervalSec' in section [Service], ignoring.
+[    4.480206] systemd[1]: /etc/systemd/system/1panel-agent.service:12: Unknown key 'StartLimitIntervalSec' in section [Service], ignoring.
+[    4.491961] systemd[1]: Queued start job for default target graphical.target.
+[    4.548292] systemd[1]: Created slice system-getty.slice - Slice /system/getty.
+[    4.553127] systemd[1]: Created slice system-modprobe.slice - Slice /system/modprobe.
+[    4.556384] systemd[1]: Created slice user.slice - User and Session Slice.
+[    4.557138] systemd[1]: Started systemd-ask-password-console.path - Dispatch Password Requests to Console Directory Watch.
+[    4.557859] systemd[1]: Started systemd-ask-password-wall.path - Forward Password Requests to Wall Directory Watch.
+[    4.558497] systemd[1]: Starting of proc-sys-fs-binfmt_misc.automount - Arbitrary Executable File Formats File System Automount Point unsupported.
+[    4.559225] systemd[1]: Reached target paths.target - Path Units.
+[    4.559582] systemd[1]: Reached target remote-fs.target - Remote File Systems.
+[    4.559947] systemd[1]: Reached target slices.target - Slice Units.
+[    4.572887] systemd[1]: Reached target swap.target - Swaps.
+[    4.595417] systemd[1]: Listening on systemd-creds.socket - Credential Encryption/Decryption.
+[    4.608956] systemd[1]: Listening on systemd-initctl.socket - initctl Compatibility Named Pipe.
+[    4.622659] systemd[1]: Listening on systemd-journald-dev-log.socket - Journal Socket (/dev/log).
+[    4.636419] systemd[1]: Listening on systemd-journald.socket - Journal Sockets.
+[    4.649550] systemd[1]: systemd-pcrextend.socket - TPM PCR Measurements skipped, unmet condition check ConditionSecurity=measured-uki
+[    4.675279] systemd[1]: systemd-pcrlock.socket - Make TPM PCR Policy skipped, unmet condition check ConditionSecurity=measured-uki
+[    4.689179] systemd[1]: Listening on systemd-udevd-control.socket - udev Control Socket.
+[    4.702847] systemd[1]: Listening on systemd-udevd-kernel.socket - udev Kernel Socket.
+[    4.723435] systemd[1]: Mounting dev-hugepages.mount - Huge Pages File System...
+[    4.743579] systemd[1]: Mounting dev-mqueue.mount - POSIX Message Queue File System...
+[    4.779644] systemd[1]: Mounting run-lock.mount - Legacy Locks Directory /run/lock...
+[    4.812352] systemd[1]: Mounting sys-kernel-debug.mount - Kernel Debug File System...
+[    4.827072] systemd[1]: sys-kernel-tracing.mount - Kernel Trace File System skipped, unmet condition check ConditionPathExists=/sys/kernel/tracing
+[    4.861693] systemd[1]: Mounting tmp.mount - Temporary Directory /tmp...
+[    4.883768] systemd[1]: Starting kmod-static-nodes.service - Create List of Static Device Nodes...
+[    4.904705] systemd[1]: Starting modprobe@configfs.service - Load Kernel Module configfs...
+[    4.933331] systemd[1]: Starting modprobe@drm.service - Load Kernel Module drm...
+[    4.953952] systemd[1]: Starting modprobe@efi_pstore.service - Load Kernel Module efi_pstore...
+[    4.974610] systemd[1]: Starting modprobe@fuse.service - Load Kernel Module fuse...
+[    4.988638] systemd[1]: systemd-hibernate-clear.service - Clear Stale Hibernate Storage Info skipped, unmet condition check ConditionPathExists=/sys/firmware/efi/efivars/HibernateLocation-8cf2644b-4b0b-428f-9387-6d876050dc67
+[    5.031764] fuse: init (API version 7.41)
+[    5.033197] systemd[1]: Starting systemd-journald.service - Journal Service...
+[    5.063159] systemd[1]: Starting systemd-modules-load.service - Load Kernel Modules...
+[    5.076789] systemd[1]: systemd-pcrmachine.service - TPM PCR Machine ID Measurement skipped, unmet condition check ConditionSecurity=measured-uki
+[    5.112243] systemd[1]: Starting systemd-remount-fs.service - Remount Root and Kernel File Systems...
+[    5.126397] systemd[1]: systemd-tpm2-setup-early.service - Early TPM SRK Setup skipped, unmet condition check ConditionSecurity=measured-uki
+[    5.162312] systemd[1]: Starting systemd-udev-load-credentials.service - Load udev Rules from Credentials...
+[    5.184475] systemd[1]: Starting systemd-udev-trigger.service - Coldplug All udev Devices...
+[    5.214325] systemd[1]: Mounted dev-hugepages.mount - Huge Pages File System.
+[    5.232480] systemd[1]: Mounted dev-mqueue.mount - POSIX Message Queue File System.
+[    5.248506] systemd[1]: Mounted run-lock.mount - Legacy Locks Directory /run/lock.
+[    5.263666] systemd[1]: Mounted sys-kernel-debug.mount - Kernel Debug File System.
+[    5.279390] systemd[1]: Mounted tmp.mount - Temporary Directory /tmp.
+[    5.280298] systemd-journald[260]: Collecting audit messages is disabled.
+[    5.295931] systemd[1]: Finished kmod-static-nodes.service - Create List of Static Device Nodes.
+[    5.324029] systemd[1]: modprobe@configfs.service: Deactivated successfully.
+[    5.340078] systemd[1]: Finished modprobe@configfs.service - Load Kernel Module configfs.
+[    5.357031] systemd[1]: modprobe@drm.service: Deactivated successfully.
+[    5.373353] systemd[1]: Finished modprobe@drm.service - Load Kernel Module drm.
+[    5.390014] systemd[1]: modprobe@efi_pstore.service: Deactivated successfully.
+[    5.406094] systemd[1]: Finished modprobe@efi_pstore.service - Load Kernel Module efi_pstore.
+[    5.422537] systemd[1]: modprobe@fuse.service: Deactivated successfully.
+[    5.438176] systemd[1]: Finished modprobe@fuse.service - Load Kernel Module fuse.
+[    5.454891] systemd[1]: Finished systemd-modules-load.service - Load Kernel Modules.
+[    5.472058] systemd[1]: Finished systemd-remount-fs.service - Remount Root and Kernel File Systems.
+[    5.489150] systemd[1]: Finished systemd-udev-load-credentials.service - Load udev Rules from Credentials.
+[    5.515495] systemd[1]: Mounting sys-fs-fuse-connections.mount - FUSE Control File System...
+[    5.554783] systemd[1]: Mounting sys-kernel-config.mount - Kernel Configuration File System...
+[    5.570971] systemd[1]: systemd-hwdb-update.service - Rebuild Hardware Database skipped, unmet condition check ConditionNeedsUpdate=/etc
+[    5.599245] systemd[1]: systemd-pstore.service - Platform Persistent Storage Archival skipped, unmet condition check ConditionDirectoryNotEmpty=/sys/fs/pstore
+[    5.635134] systemd[1]: Starting systemd-random-seed.service - Load/Save OS Random Seed...
+[    5.656931] systemd[1]: Starting systemd-sysctl.service - Apply Kernel Variables...
+[    5.686933] systemd[1]: Starting systemd-tmpfiles-setup-dev-early.service - Create Static Device Nodes in /dev gracefully...
+[    5.702036] systemd[1]: systemd-tpm2-setup.service - TPM SRK Setup skipped, unmet condition check ConditionSecurity=measured-uki
+[    5.723301] systemd[1]: Started systemd-journald.service - Journal Service.
+[    5.867336] systemd-journald[260]: Received client request to flush runtime journal.
+[    5.869767] systemd-journald[260]: File /var/log/journal/6056bedfe6f94a629886afd28775da5e/system.journal corrupted or uncleanly shut down, renaming and replacing.
+[    6.384879] random: crng init done
+[    6.815442] z17s-hb uptime=7 load=0.32/0.07/0.02
+[    6.881888] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    6.899960] Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[    6.900590] Loaded X.509 cert 'wens: 61c038651aabdcf94bd0ac7ff06c7248db18c600'
+[    6.902697] cfg80211: loaded regulatory.db is malformed or signature is missing/invalid
+[    6.948943] ath10k_core: loading out-of-tree module taints kernel.
+[    6.986951] rtc-pm8xxx 800f000.spmi:pmic@0:rtc@6000: registered as rtc0
+[    7.003043] ath10k_snoc 18800000.wifi: Adding to iommu group 2
+[    7.201050] ath10k_snoc 18800000.wifi: supply vdd-3.3-ch1 not found, using dummy regulator
+[    7.211474] NET: Registered PF_QIPCRTR protocol family
+[    7.214482] remoteproc remoteproc0: 4080000.remoteproc is available
+[    7.260629] Bluetooth: Core ver 2.22
+[    7.260685] NET: Registered PF_BLUETOOTH protocol family
+[    7.260689] Bluetooth: HCI device and connection manager initialized
+[    7.260702] Bluetooth: HCI socket layer initialized
+[    7.260709] Bluetooth: L2CAP socket layer initialized
+[    7.260723] Bluetooth: SCO socket layer initialized
+[    7.264270] Bluetooth: HCI UART driver ver 2.3
+[    7.264286] Bluetooth: HCI UART protocol H4 registered
+[    7.264359] Bluetooth: HCI UART protocol QCA registered
+[    7.265401] Bluetooth: hci0: setting up wcn399x
+[    7.284114] rmi4_i2c 0-0020: registering I2C-connected sensor
+[    7.312887] rmi4_f01 rmi4-00.fn01: found RMI device, manufacturer: Synaptics, product: S3330, fw id: 2656066
+[    7.321961] input: Synaptics S3330 as /devices/platform/soc@0/c179000.i2c/i2c-0/0-0020/rmi4-00/input/input4
+[    7.398994] Bluetooth: hci0: QCA Product ID   :0x0000000a
+[    7.399028] Bluetooth: hci0: QCA SOC Version  :0x40010214
+[    7.399046] Bluetooth: hci0: QCA ROM Version  :0x00000201
+[    7.399061] Bluetooth: hci0: QCA Patch Version:0x00000001
+[    7.411763] Bluetooth: hci0: QCA controller version 0x02140201
+[    7.411797] Bluetooth: hci0: QCA Downloading qca/crbtfw21.tlv
+[    8.190060] Bluetooth: hci0: QCA Downloading qca/crnv21.bin
+[    8.345976] Bluetooth: hci0: QCA setup on UART is completed
+[   12.790657] printk: legacy console [ttyGS0] enabled
+[   12.791063] g_serial gadget.0: Gadget Serial v2.4
+[   12.791070] g_serial gadget.0: g_serial ready
+[   13.895810] z17s-early: ttyGS0=ready
+[   14.034180] Bluetooth: BNEP (Ethernet Emulation) ver 1.3
+[   14.034196] Bluetooth: BNEP filters: protocol multicast
+[   14.034210] Bluetooth: BNEP socket layer initialized
+[   14.049189] Bluetooth: MGMT ver 1.23
+[   14.059023] NET: Registered PF_ALG protocol family
+[   14.127143] remoteproc remoteproc1: 17300000.remoteproc is available
+[   14.127998] remoteproc remoteproc1: powering up 17300000.remoteproc
+[   14.128036] remoteproc remoteproc1: Booting fw image qcom/msm8998/nubia/adsp.mdt, size 7260
+[   14.129245] PDR: service lookup for avs/audio failed: -6
+[   14.138468] Bluetooth: RFCOMM TTY layer initialized
+[   14.138511] Bluetooth: RFCOMM socket layer initialized
+[   14.138550] Bluetooth: RFCOMM ver 1.11
+[   14.142769] Bluetooth: hci0: setting up wcn399x
+[   14.276960] Bluetooth: hci0: QCA Product ID   :0x0000000a
+[   14.276979] Bluetooth: hci0: QCA SOC Version  :0x40010214
+[   14.276984] Bluetooth: hci0: QCA ROM Version  :0x00000201
+[   14.276989] Bluetooth: hci0: QCA Patch Version:0x00000001
+[   14.289440] Bluetooth: hci0: QCA controller version 0x02140201
+[   14.289463] Bluetooth: hci0: QCA Downloading qca/crbtfw21.tlv
+[   14.383357] remoteproc remoteproc1: remote processor 17300000.remoteproc is now up
+[   14.390714] qcom,apr 17300000.remoteproc:glink-edge.apr_audio_svc.-1.-1: Adding APR/GPR dev: aprsvc:service:4:8
+[   14.390862] qcom,apr 17300000.remoteproc:glink-edge.apr_audio_svc.-1.-1: Adding APR/GPR dev: aprsvc:service:4:7
+[   14.390924] qcom,apr 17300000.remoteproc:glink-edge.apr_audio_svc.-1.-1: Adding APR/GPR dev: aprsvc:service:4:4
+[   14.391018] qcom,apr 17300000.remoteproc:glink-edge.apr_audio_svc.-1.-1: Adding APR/GPR dev: aprsvc:service:4:3
+[   14.417994] q6asm-dai 17300000.remoteproc:glink-edge:apr:service@7:dais: Adding to iommu group 3
+[   14.444231] qcom,slim-ngd-ctrl 171c0000.slim-ngd: SLIM SAT: Rcvd master capability
+[   14.489361] wcd9335-slim 217:1a0:1:0: WCD9335 CODEC version is v2.0
+[   14.490711] qcom,slim-ngd-ctrl 171c0000.slim-ngd: SLIM controller Registered
+[   14.689732] tas2555 1-004c: tas2555_i2c_probe enter
+[   14.689855] tas2555 1-004c: ti,cdc-reset-gpio=537
+[   14.689894] tas2555 1-004c: Looking up ti,irq-gpio property in node amplifier@4c failed -2
+[   14.718775] tas2555 1-004c: TAS2555 PGID: 0xd0
+[   14.718857] tas2555 1-004c: tas2555_register_codec, enter
+[   14.721404] tas2555 1-004c: tas2555_fw_ready:
+[   14.721452] tas2555 1-004c: FW Size        = 23560
+[   14.721473] tas2555 1-004c: Checksum       = 0x40F2B502
+[   14.721492] tas2555 1-004c: PPC Version    = 0x10CC000
+[   14.721514] tas2555 1-004c: FW  Version    = 0x1010300
+[   14.721530] tas2555 1-004c: Driver Version = 0x0201
+[   14.721546] tas2555 1-004c: Timestamp      = 1502795403
+[   14.721566] tas2555 1-004c: DDC Name       = tas2555_uCDSP.bin
+[   14.721581] tas2555 1-004c: Description    = TI SmartAmp
+[   14.721700] tas2555 1-004c: find default configuration 0
+[   14.724376] tas2555 1-004c: read RECOVER1: 0x03
+[   14.724746] tas2555 1-004c: read RECOVER2: 0x23
+[   14.724991] tas2555 1-004c: read GLITCH1: 0x24
+[   14.725381] tas2555 1-004c: read GLITCH2: 0x27
+[   14.726017] tas2555 1-004c: load program 0
+[   14.726041] tas2555 1-004c: TAS2555 load data: Tuning Mode Program, Blocks = 1, Block Type = 1
+[   14.726067] tas2555 1-004c: TAS2555 load block: Type = 1, commands = 3933
+[   15.067185] Bluetooth: hci0: QCA Downloading qca/crnv21.bin
+[   15.115586] Bluetooth: hci0: QCA setup on UART is completed
+[   15.190865] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7c
+[   15.191067] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   15.191325] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   15.191548] tas2555 1-004c: Block[0x1] PChkSum match
+[   15.191572] tas2555 1-004c: Block[0x1] YChkSum match
+[   15.191591] tas2555 1-004c: TAS2555 load PLL: pll block for Configuration configuration_Tuning Mode_48 KHz_s1
+[   15.191613] tas2555 1-004c: TAS2555 load block: Type = 0, commands = 15
+[   15.194099] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   15.194233] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   15.194426] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   15.194447] tas2555 1-004c: load configuration configuration_Tuning Mode_48 KHz_s1 conefficient pre block
+[   15.194467] tas2555 1-004c: TAS2555 load data: MUSIC, Blocks = 2, Block Type = 4
+[   15.194488] tas2555 1-004c: TAS2555 load block: Type = 4, commands = 9
+[   15.197319] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   15.197458] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   15.197653] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   15.197675] tas2555 1-004c: Block[0x4] YChkSum match
+[   15.198011] tas2555 1-004c: TAS2555 PLL_CLKIN = 0x00
+[   15.198033] tas2555 1-004c: tas2555_load_configuration: 0
+[   15.198051] tas2555 1-004c: TAS2555 was powered down -> set flag to load configuration data when OS powers up the TAS2555 the next time
+[   16.759435] tas2555 1-004c: tas2555_codec_probe
+[   16.913431] z17s-hb uptime=17 load=0.43/0.10/0.03
+[   17.004244] z17s-audio-load: ready card=NubiaZ17S adsp=remoteproc1
+[   17.193122] tas2555 1-004c: Enable: 0
+[   17.193217] tas2555 1-004c: find matching configuration 0
+[   17.195713] tas2555 1-004c: read RECOVER1: 0x03
+[   17.196522] tas2555 1-004c: read RECOVER2: 0x23
+[   17.196745] tas2555 1-004c: read GLITCH1: 0x24
+[   17.197195] tas2555 1-004c: read GLITCH2: 0x27
+[   17.197871] tas2555 1-004c: load program 0
+[   17.197895] tas2555 1-004c: TAS2555 load data: Tuning Mode Program, Blocks = 1, Block Type = 1
+[   17.197922] tas2555 1-004c: TAS2555 load block: Type = 1, commands = 3933
+[   17.666901] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7c
+[   17.667149] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   17.667531] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   17.668000] tas2555 1-004c: Block[0x1] PChkSum match
+[   17.668025] tas2555 1-004c: Block[0x1] YChkSum match
+[   17.668044] tas2555 1-004c: TAS2555 load PLL: pll block for Configuration configuration_Tuning Mode_48 KHz_s1
+[   17.668065] tas2555 1-004c: TAS2555 load block: Type = 0, commands = 15
+[   17.671450] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   17.671594] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   17.671818] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   17.671840] tas2555 1-004c: load configuration configuration_Tuning Mode_48 KHz_s1 conefficient pre block
+[   17.671860] tas2555 1-004c: TAS2555 load data: MUSIC, Blocks = 2, Block Type = 4
+[   17.671883] tas2555 1-004c: TAS2555 load block: Type = 4, commands = 9
+[   17.674782] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   17.674997] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   17.675274] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   17.675300] tas2555 1-004c: Block[0x4] YChkSum match
+[   17.675643] tas2555 1-004c: TAS2555 PLL_CLKIN = 0x00
+[   17.675666] tas2555 1-004c: tas2555_load_configuration: 0
+[   17.675686] tas2555 1-004c: TAS2555 was powered down -> set flag to load configuration data when OS powers up the TAS2555 the next time
+[   17.675835] tas2555 1-004c: tas2555_load_configuration: 0
+[   17.675857] tas2555 1-004c: Configuration 0 is already loaded
+[   17.675976] tas2555 1-004c: tas2555_fs_put = 48000
+[   17.675998] tas2555 1-004c: tas2555_setup_clocks: nSamplingRate = 48000 [Hz]
+[   17.676017] tas2555 1-004c: Sampling rate for current configuration matches: 48000
+[   17.676166] tas2555 1-004c: Calibration 0 doesn't exist
+[   17.691040] tas2555 1-004c: tas2555_fw_ready:
+[   17.691066] tas2555 1-004c: clear current firmware
+[   17.691120] tas2555 1-004c: FW Size        = 23560
+[   17.691139] tas2555 1-004c: Checksum       = 0x40F2B502
+[   17.691157] tas2555 1-004c: PPC Version    = 0x10CC000
+[   17.691173] tas2555 1-004c: FW  Version    = 0x1010300
+[   17.691190] tas2555 1-004c: Driver Version = 0x0201
+[   17.691206] tas2555 1-004c: Timestamp      = 1502795403
+[   17.691223] tas2555 1-004c: DDC Name       = tas2555_uCDSP.bin
+[   17.691239] tas2555 1-004c: Description    = TI SmartAmp
+[   17.693440] tas2555 1-004c: read RECOVER1: 0x03
+[   17.693939] tas2555 1-004c: read RECOVER2: 0x23
+[   17.694141] tas2555 1-004c: read GLITCH1: 0x24
+[   17.694447] tas2555 1-004c: read GLITCH2: 0x27
+[   17.695027] tas2555 1-004c: load program 0
+[   17.695049] tas2555 1-004c: TAS2555 load data: Tuning Mode Program, Blocks = 1, Block Type = 1
+[   17.695073] tas2555 1-004c: TAS2555 load block: Type = 1, commands = 3933
+[   18.119086] tas2555 1-004c: Enable: 0
+[   18.119204] tas2555 1-004c: find matching configuration 0
+[   18.137514] tas2555 1-004c: read RECOVER1: 0x03
+[   18.141396] tas2555 1-004c: read RECOVER2: 0x23
+[   18.143648] tas2555 1-004c: read GLITCH1: 0x24
+[   18.145444] remoteproc remoteproc0: powering up 4080000.remoteproc
+[   18.147402] tas2555 1-004c: read GLITCH2: 0x27
+[   18.147876] remoteproc remoteproc0: Booting fw image qcom/msm8998/nubia/mba.mbn, size 230056
+[   18.176941] tas2555 1-004c: load program 0
+[   18.176977] tas2555 1-004c: TAS2555 load data: Tuning Mode Program, Blocks = 1, Block Type = 1
+[   18.177004] tas2555 1-004c: TAS2555 load block: Type = 1, commands = 3933
+[   18.245863] qcom-q6v5-mss 4080000.remoteproc: MBA booted without debug policy, loading mpss
+[   18.265395] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7c
+[   18.275524] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   18.276137] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   18.286384] tas2555 1-004c: Block PChkSum Error: FW = 0xe0, Reg = 0x69
+[   19.201126] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7c
+[   19.205094] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   19.205686] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   19.209668] tas2555 1-004c: Block PChkSum Error: FW = 0xe0, Reg = 0x9c
+[   19.222642] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7c
+[   19.223929] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   19.224749] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   19.229570] tas2555 1-004c: Block PChkSum Error: FW = 0xe0, Reg = 0x4b
+[   19.755566] remoteproc remoteproc0: remote processor 4080000.remoteproc is now up
+[   20.214605] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7c
+[   20.216178] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   20.216364] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   20.218530] tas2555 1-004c: Block PChkSum Error: FW = 0xe0, Reg = 0x6f
+[   20.232701] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   20.240055] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   20.240382] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   20.248148] tas2555 1-004c: Block PChkSum Error: FW = 0xe0, Reg = 0x51
+[   21.174562] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7c
+[   21.176637] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   21.177387] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   21.179750] tas2555 1-004c: Block PChkSum Error: FW = 0xe0, Reg = 0x8c
+[   21.188339] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   21.188975] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   21.189383] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   21.194009] tas2555 1-004c: Block PChkSum Error: FW = 0xe0, Reg = 0x4b
+[   22.130752] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7c
+[   22.131013] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   22.134315] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   22.134499] tas2555 1-004c: Block PChkSum Error: FW = 0xe0, Reg = 0xf7
+[   22.150755] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   22.158732] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   22.159255] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   22.166895] tas2555 1-004c: Block PChkSum Error: FW = 0xe0, Reg = 0x51
+[   23.094525] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7c
+[   23.096260] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   23.096609] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   23.098443] tas2555 1-004c: Block PChkSum Error: FW = 0xe0, Reg = 0x8c
+[   23.105988] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   23.106331] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   23.107526] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   23.108027] tas2555 1-004c: Block PChkSum Error: FW = 0xe0, Reg = 0x0
+[   23.121518] tas2555 1-004c: Block (1) load error
+[   23.134816] tas2555 1-004c: failsafe
+[   23.148082] tas2555 1-004c: Enable: load shutdown sequence
+[   26.986302] z17s-hb uptime=27 load=0.59/0.14/0.05
+[   28.679745] ath10k_snoc 18800000.wifi: qmi chip_id 0x30214 chip_family 0x4001 board_id 0xff soc_id 0x40010002
+[   28.679796] ath10k_snoc 18800000.wifi: qmi fw_version 0x10008548 fw_build_timestamp 2018-02-01 20:31 fw_build_id QC_IMAGE_VERSION_STRING=WLAN.HL.1.0-01352-QCAHLSWMTPLZ-1
+[   28.679893] ath10k_snoc 18800000.wifi: qmi not waiting for msa_ready indicator
+[   31.308863] ath10k_snoc 18800000.wifi: wcn3990 hw1.0 target 0x00000008 chip_id 0x00000000 sub 0000:0000
+[   31.308907] ath10k_snoc 18800000.wifi: kconfig debug 0 debugfs 0 tracing 0 dfs 0 testmode 0
+[   31.308938] ath10k_snoc 18800000.wifi: firmware ver  api 5 features wowlan,mgmt-tx-by-reference,non-bmi crc32 b3d4b790
+[   31.308988] ath10k_snoc 18800000.wifi: WCN3990: SW crypto without raw mode, HW crypto disabled
+[   31.370925] ath10k_snoc 18800000.wifi: htt-ver 3.50 wmi-op 4 htt-op 3 cal file max-sta 32 raw 0 hwcrypto 0
+[   31.463277] ath10k_snoc 18800000.wifi: invalid MAC address; choosing random
+[   31.463368] ath10k_snoc 18800000.wifi: WCN3990: not advertising SUPPORTS_PS
+[   31.463390] ath10k_snoc 18800000.wifi: WCN3990: clear SW_CRYPTO_CONTROL (allow SW crypto fallback)
+[   31.463412] ath10k_snoc 18800000.wifi: WCN3990: skip wowlan init
+[   31.463432] ath: EEPROM regdomain: 0x809c
+[   31.463449] ath: EEPROM indicates we should expect a country code
+[   31.463468] ath: doing EEPROM country->regdmn map search
+[   31.463480] ath: country maps to regdmn code: 0x52
+[   31.463495] ath: Country alpha2 being used: CN
+[   31.463508] ath: Regpair used: 0x52
+[   37.027268] z17s-hb uptime=37 load=0.65/0.17/0.06
+[   42.221340] EXT4-fs (sda2): mounted filesystem 57f8f4bc-abf4-655f-bf67-946fc0f9f25b ro with ordered data mode. Quota mode: none.
+[   44.772207] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   44.772348] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   44.772510] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   44.772660] tas2555 1-004c: Block PChkSum Error: FW = 0xe0, Reg = 0x12
+[   44.780957] tas2555 1-004c: Block (1) load error
+[   44.788718] tas2555 1-004c: failsafe
+[   44.796500] tas2555 1-004c: Enable: load shutdown sequence
+[   44.827879] tas2555 1-004c: Firmware not loaded
+[   44.842337] tas2555 1-004c: tas2555_fw_ready:
+[   44.842371] tas2555 1-004c: FW Size        = 23560
+[   44.842393] tas2555 1-004c: Checksum       = 0x40F2B502
+[   44.842412] tas2555 1-004c: PPC Version    = 0x10CC000
+[   44.842430] tas2555 1-004c: FW  Version    = 0x1010300
+[   44.842446] tas2555 1-004c: Driver Version = 0x0201
+[   44.842464] tas2555 1-004c: Timestamp      = 1502795403
+[   44.842486] tas2555 1-004c: DDC Name       = tas2555_uCDSP.bin
+[   44.842506] tas2555 1-004c: Description    = TI SmartAmp
+[   44.843032] tas2555 1-004c: tas2555_fs_put = 48000
+[   44.843065] tas2555 1-004c: tas2555_setup_clocks: nSamplingRate = 48000 [Hz]
+[   44.843099] tas2555 1-004c: Sampling rate for current configuration matches: 48000
+[   44.843279] tas2555 1-004c: Calibration 0 doesn't exist
+[   44.857678] tas2555 1-004c: read RECOVER1: 0x03
+[   44.858123] tas2555 1-004c: read RECOVER2: 0x23
+[   44.858359] tas2555 1-004c: read GLITCH1: 0x24
+[   44.858708] tas2555 1-004c: read GLITCH2: 0x27
+[   44.859378] tas2555 1-004c: load program 0
+[   44.859404] tas2555 1-004c: TAS2555 load data: Tuning Mode Program, Blocks = 1, Block Type = 1
+[   44.859430] tas2555 1-004c: TAS2555 load block: Type = 1, commands = 3933
+[   45.127294] bridge: filtering via arp/ip/ip6tables is no longer available by default. Update your scripts to load br_netfilter if you need this.
+[   45.129003] Bridge firewalling registered
+[   45.292918] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7c
+[   45.293193] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   45.293429] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   45.293655] tas2555 1-004c: Block[0x1] PChkSum match
+[   45.293678] tas2555 1-004c: Block[0x1] YChkSum match
+[   45.293699] tas2555 1-004c: TAS2555 load PLL: pll block for Configuration configuration_Tuning Mode_48 KHz_s1
+[   45.293722] tas2555 1-004c: TAS2555 load block: Type = 0, commands = 15
+[   45.298689] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   45.298899] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   45.299117] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   45.299143] tas2555 1-004c: load configuration configuration_Tuning Mode_48 KHz_s1 conefficient pre block
+[   45.299168] tas2555 1-004c: TAS2555 load data: MUSIC, Blocks = 2, Block Type = 4
+[   45.299194] tas2555 1-004c: TAS2555 load block: Type = 4, commands = 9
+[   45.302408] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   45.302601] tas2555 1-004c: write TAS2555_SPK_CTRL_REG: 0x7a
+[   45.302874] tas2555 1-004c: read TAS2555_SPK_CTRL_REG: 0x7a
+[   45.302948] tas2555 1-004c: Block[0x4] YChkSum match
+[   45.303333] tas2555 1-004c: TAS2555 PLL_CLKIN = 0x00
+[   45.303364] tas2555 1-004c: tas2555_load_configuration: 0
+[   45.303384] tas2555 1-004c: TAS2555 was powered down -> set flag to load configuration data when OS powers up the TAS2555 the next time
+[   46.863097] docker0: port 1(vethc09a346) entered blocking state
+[   46.863118] docker0: port 1(vethc09a346) entered disabled state
+[   46.863152] vethc09a346: entered allmulticast mode
+[   46.863293] vethc09a346: entered promiscuous mode
+[   47.073412] qnoc-msm8998 1500000.interconnect: sync_state() pending due to 1e40000.ipa
+[   47.073435] qnoc-msm8998 1625000.interconnect: sync_state() pending due to 1e40000.ipa
+[   47.073441] qnoc-msm8998 1008000.interconnect: sync_state() pending due to 1e40000.ipa
+[   47.073448] qnoc-msm8998 1705000.interconnect: sync_state() pending due to 1e40000.ipa
+[   47.073461] qnoc-msm8998 17900000.interconnect: sync_state() pending due to 1e40000.ipa
+[   47.089202] z17s-hb uptime=47 load=0.87/0.23/0.08
+[   47.760643] eth0: renamed from vethc1c8815
+[   47.764411] docker0: port 1(vethc09a346) entered blocking state
+[   47.764448] docker0: port 1(vethc09a346) entered forwarding state
+[   51.820853] dwc3 a800000.usb: request 00000000953fd290 was not queued to ep1in
+[   51.821011] printk: legacy console [ttyGS0] disabled
+[   59.974739] printk: legacy console [ttyGS0] enabled
+[   59.998089] configfs-gadget.z17snet gadget.0: HOST MAC f6:33:8b:33:9e:09
+[   59.998121] configfs-gadget.z17snet gadget.0: MAC 6a:4a:90:e0:bf:7c
+[   63.670867] z17s-hb uptime=64 load=1.14/0.32/0.11
+[   73.721275] z17s-hb uptime=74 load=1.12/0.35/0.12
+[   83.736689] z17s-hb uptime=84 load=1.10/0.37/0.13
+[   93.825991] z17s-hb uptime=94 load=1.24/0.42/0.15
+[  103.905299] z17s-hb uptime=104 load=1.20/0.44/0.16
+[  113.984470] z17s-hb uptime=114 load=1.17/0.46/0.17
+[  123.996488] z17s-hb uptime=124 load=1.14/0.48/0.18
+[  134.080899] z17s-hb uptime=134 load=1.20/0.51/0.20
+[  144.162720] z17s-hb uptime=144 load=1.32/0.56/0.22
+[  154.245605] z17s-hb uptime=154 load=1.51/0.63/0.24
+[  164.331310] z17s-hb uptime=164 load=1.58/0.67/0.26
+[  174.416205] z17s-hb uptime=174 load=1.49/0.68/0.27
+[  184.437698] z17s-hb uptime=184 load=1.42/0.69/0.28
+[  194.524060] z17s-hb uptime=194 load=1.35/0.70/0.29
+[  204.606828] z17s-hb uptime=205 load=1.53/0.76/0.31
+[  214.694375] z17s-hb uptime=215 load=1.44/0.77/0.32
+[  224.776846] z17s-hb uptime=225 load=1.45/0.80/0.33
+[  234.858841] z17s-hb uptime=235 load=1.38/0.80/0.34
+[  244.945511] z17s-hb uptime=245 load=1.32/0.81/0.35
+[  254.960087] z17s-hb uptime=255 load=1.27/0.82/0.35
+[  264.965489] z17s-hb uptime=265 load=1.30/0.84/0.37
+[  275.050516] z17s-hb uptime=275 load=1.49/0.90/0.39
+[  285.140602] z17s-hb uptime=285 load=1.94/1.03/0.44
+[  285.450987] ath10k_snoc 18800000.wifi: WCN3990: skip idle_ps_config
+[  287.527530] wlan0: regulatory prevented using AP config, downgraded
+[  287.543359] ath10k_snoc 18800000.wifi: sta_state a6:a9:30:d4:0c:ea 0 -> 1 vdev=0
+[  287.547902] wlan0: authenticate with a6:a9:30:d4:0c:ea (local address=dc:f0:90:96:ce:41)
+[  287.547937] wlan0: send auth to a6:a9:30:d4:0c:ea (try 1/3)
+[  287.563667] wlan0: authenticated
+[  287.563703] ath10k_snoc 18800000.wifi: sta_state a6:a9:30:d4:0c:ea 1 -> 2 vdev=0
+[  287.565454] wlan0: associate with a6:a9:30:d4:0c:ea (try 1/3)
+[  287.592605] wlan0: RX AssocResp from a6:a9:30:d4:0c:ea (capab=0x1931 status=0 aid=8)
+[  287.643957] ath10k_snoc 18800000.wifi: sta_state a6:a9:30:d4:0c:ea 2 -> 3 vdev=0
+[  287.667601] wlan0: associated
+[  287.668048] wlan0: Limiting TX power to 30 (30 - 0) dBm as advertised by a6:a9:30:d4:0c:ea
+[  287.687131] key_hw_accel enter cipher=0xfac04 idx=0 pairwise=1 link=-1 sw_crypto=0
+[  287.687180] key_hw_accel drv_set_key ret=1 uploaded=1
+[  287.687197] key_hw_accel SW ok (drv ret=1)
+[  287.687213] ieee80211_add_key done err=0 pairwise=1 idx=0 mac=a6:a9:30:d4:0c:ea link_id=-1
+[  287.687751] key_hw_accel enter cipher=0xfac04 idx=2 pairwise=0 link=-1 sw_crypto=0
+[  287.687781] key_hw_accel drv_set_key ret=1 uploaded=-1
+[  287.687796] key_hw_accel SW ok (drv ret=1)
+[  287.687808] ieee80211_add_key done err=0 pairwise=0 idx=2 mac=(null) link_id=-1
+[  287.689946] ath10k_snoc 18800000.wifi: sta_state a6:a9:30:d4:0c:ea 3 -> 4 vdev=0
+[  287.699010] ath10k_snoc 18800000.wifi: unhandled tx completion status 5
+[  287.703420] ath10k_snoc 18800000.wifi: unhandled tx completion status 5
+[  288.236965] ath10k_snoc 18800000.wifi: unhandled tx completion status 5
+[  288.684488] ath10k_snoc 18800000.wifi: unhandled tx completion status 5
+[  289.261352] ath10k_snoc 18800000.wifi: unhandled tx completion status 5
+[  289.369957] ath10k_snoc 18800000.wifi: unhandled tx completion status 5
+[  289.699105] ath10k_snoc 18800000.wifi: unhandled tx completion status 5
+[  289.710104] ath10k_snoc 18800000.wifi: unhandled tx completion status 5
+[  290.157007] ath10k_snoc 18800000.wifi: unhandled tx completion status 5
+[  290.738836] wlan0: deauthenticated from a6:a9:30:d4:0c:ea (Reason: 15=4WAY_HANDSHAKE_TIMEOUT)
+[  295.157142] z17s-hb uptime=295 load=2.12/1.10/0.47
+[  295.915134] ath10k_snoc 18800000.wifi: failed to flush transmit queue (skip 0 ar-state 1): 0
+[  295.915214] ath10k_snoc 18800000.wifi: sta_state a6:a9:30:d4:0c:ea 4 -> 3 vdev=0
+[  295.915260] ath10k_snoc 18800000.wifi: sta_state a6:a9:30:d4:0c:ea 3 -> 2 vdev=0
+[  295.915286] ath10k_snoc 18800000.wifi: sta_state a6:a9:30:d4:0c:ea 2 -> 1 vdev=0
+[  295.915335] ath10k_snoc 18800000.wifi: sta_state a6:a9:30:d4:0c:ea 1 -> 0 vdev=0
+[  296.006355] qcom-q6v5-mss 4080000.remoteproc: fatal error received: err_qdi.c:450:EX:wlan_process:1:WLAN RT:207a:PC=b00c0098
+[  296.006526] remoteproc remoteproc0: crash detected in 4080000.remoteproc: type fatal error
+[  296.006878] remoteproc remoteproc0: handling crash #1 in 4080000.remoteproc
+[  296.006971] remoteproc remoteproc0: recovering 4080000.remoteproc
+[  296.050256] ath10k_snoc 18800000.wifi: firmware crashed! (guid c83d25b6-39c0-43f0-bd37-a7756cf930d6)
+[  296.050539] ath10k_snoc 18800000.wifi: wcn3990 hw1.0 target 0x00000008 chip_id 0x00000000 sub 0000:0000
+[  296.050574] ath10k_snoc 18800000.wifi: kconfig debug 0 debugfs 0 tracing 0 dfs 0 testmode 0
+[  296.050605] ath10k_snoc 18800000.wifi: firmware ver 1.0.0.500 api 5 features wowlan,mgmt-tx-by-reference,non-bmi crc32 b3d4b790
+[  296.050637] ath10k_snoc 18800000.wifi: board_file api 2 bmi_id N/A crc32 00000000
+[  296.050662] ath10k_snoc 18800000.wifi: htt-ver 3.50 wmi-op 4 htt-op 3 cal file max-sta 32 raw 0 hwcrypto 0
+[  296.109821] qcom-q6v5-mss 4080000.remoteproc: port failed halt
+[  296.117753] remoteproc remoteproc0: stopped remote processor 4080000.remoteproc
+[  296.222125] qcom-q6v5-mss 4080000.remoteproc: MBA booted without debug policy, loading mpss
+[  298.130972] remoteproc remoteproc0: remote processor 4080000.remoteproc is now up
+[  298.986223] ath10k_snoc 18800000.wifi: failed to set 2g txpower 60: -108
+[  298.986243] ath10k_snoc 18800000.wifi: failed to setup tx power 30: -108
+[  298.986263] ath10k_snoc 18800000.wifi: failed to set vdev wmm params on vdev 0: -108
+[  298.986272] ath10k_snoc 18800000.wifi: failed to set vdev wmm params on vdev 0: -108
+[  298.986281] ath10k_snoc 18800000.wifi: failed to set vdev wmm params on vdev 0: -108
+[  298.986289] ath10k_snoc 18800000.wifi: failed to set vdev wmm params on vdev 0: -108
+[  298.986301] ath10k_snoc 18800000.wifi: failed to stop WMI vdev 0: -108
+[  298.986308] ath10k_snoc 18800000.wifi: failed to stop vdev 0: -108
+[  298.986324] ath10k_snoc 18800000.wifi: failed to flush transmit queue (skip 1 ar-state 1): 5000
+[  301.090983] ath10k_warn: 4 callbacks suppressed
+[  301.090997] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  302.092836] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  303.094647] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  304.096407] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  305.097977] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  305.212182] z17s-hb uptime=305 load=2.03/1.11/0.48
+[  306.099442] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  307.101235] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  308.103008] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  309.104806] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  310.106601] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  311.108443] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  312.110494] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  313.111467] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  314.112589] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  315.113444] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  315.245137] z17s-hb uptime=315 load=2.03/1.14/0.50
+[  316.114442] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  317.115430] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  318.120835] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  319.130235] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  320.139169] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  321.147587] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  322.155559] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  323.163149] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  324.170347] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  325.177194] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  325.335096] z17s-hb uptime=325 load=1.94/1.15/0.51
+[  326.183673] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  327.189884] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  328.195762] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  329.202126] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  330.207749] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  331.212668] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  332.217823] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  333.106895] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  333.222284] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  333.698853] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  334.703086] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  335.407301] z17s-hb uptime=335 load=1.80/1.14/0.52
+[  335.707950] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  336.712798] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  337.717390] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  338.137856] qcom-q6v5-mss 4080000.remoteproc: fatal error received: err_qdi.c:450:EX:wlan_process:1:WLAN RT:207a:PC=b00c0098
+[  338.138016] remoteproc remoteproc0: crash detected in 4080000.remoteproc: type fatal error
+[  338.138219] remoteproc remoteproc0: handling crash #2 in 4080000.remoteproc
+[  338.138315] remoteproc remoteproc0: recovering 4080000.remoteproc
+[  338.240762] qcom-q6v5-mss 4080000.remoteproc: port failed halt
+[  338.241797] remoteproc remoteproc0: stopped remote processor 4080000.remoteproc
+[  338.348048] qcom-q6v5-mss 4080000.remoteproc: MBA booted without debug policy, loading mpss
+[  338.721771] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  339.726027] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  339.803346] remoteproc remoteproc0: remote processor 4080000.remoteproc is now up
+[  340.729444] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  341.732837] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  342.735985] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  343.739081] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  344.742097] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  345.459893] z17s-hb uptime=345 load=1.83/1.17/0.53
+[  345.745777] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  346.749239] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  347.752656] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  348.756003] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  349.758904] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  350.761484] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  351.764795] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  352.767889] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  353.770737] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  354.773116] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  355.488915] z17s-hb uptime=355 load=1.78/1.18/0.54
+[  355.776130] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  356.779084] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  357.781639] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  358.784752] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  359.158892] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  359.722639] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  360.725420] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  361.728168] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  362.730683] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  363.733426] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  364.735589] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  365.542137] z17s-hb uptime=365 load=1.66/1.18/0.55
+[  365.738281] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  366.740256] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  367.742885] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  368.745448] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  369.747992] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  370.750504] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  371.753442] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  372.755969] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  373.758463] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  374.760246] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  375.569704] z17s-hb uptime=375 load=1.56/1.17/0.55
+[  375.762677] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  376.765130] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  377.767540] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  378.769924] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  379.772371] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  379.815202] qcom-q6v5-mss 4080000.remoteproc: fatal error received: err_qdi.c:450:EX:wlan_process:1:WLAN RT:207a:PC=b00c0098
+[  379.815361] remoteproc remoteproc0: crash detected in 4080000.remoteproc: type fatal error
+[  379.815571] remoteproc remoteproc0: handling crash #3 in 4080000.remoteproc
+[  379.815664] remoteproc remoteproc0: recovering 4080000.remoteproc
+[  379.918161] qcom-q6v5-mss 4080000.remoteproc: port failed halt
+[  379.920421] remoteproc remoteproc0: stopped remote processor 4080000.remoteproc
+[  380.035955] qcom-q6v5-mss 4080000.remoteproc: MBA booted without debug policy, loading mpss
+[  380.774537] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  381.776952] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  381.947860] remoteproc remoteproc0: remote processor 4080000.remoteproc is now up
+[  382.779320] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  383.781509] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  384.783128] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  385.177283] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  385.594169] z17s-hb uptime=385 load=1.54/1.18/0.56
+[  385.744665] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  386.746218] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  387.748577] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  388.750924] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  389.753057] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  390.754571] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  391.756195] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  392.758576] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  393.760911] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  394.762361] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  395.615503] z17s-hb uptime=395 load=1.61/1.21/0.58
+[  395.764415] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  396.766865] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  397.769444] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  398.771080] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  399.772598] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  400.774887] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  401.777169] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  402.779488] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  403.781781] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  404.783370] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  405.635276] z17s-hb uptime=405 load=1.67/1.23/0.60
+[  405.785824] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  406.788161] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  407.790426] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  408.792736] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  409.795046] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  410.797393] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  411.191014] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  411.905108] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  415.192450] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  415.660666] z17s-hb uptime=415 load=1.72/1.26/0.61
+[  420.197430] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  421.954768] qcom-q6v5-mss 4080000.remoteproc: fatal error received: err_qdi.c:450:EX:wlan_process:1:WLAN RT:207a:PC=b00c0098
+[  421.954947] remoteproc remoteproc0: crash detected in 4080000.remoteproc: type fatal error
+[  421.955053] remoteproc remoteproc0: handling crash #4 in 4080000.remoteproc
+[  421.955139] remoteproc remoteproc0: recovering 4080000.remoteproc
+[  422.056658] qcom-q6v5-mss 4080000.remoteproc: port failed halt
+[  422.058332] remoteproc remoteproc0: stopped remote processor 4080000.remoteproc
+[  422.166965] qcom-q6v5-mss 4080000.remoteproc: MBA booted without debug policy, loading mpss
+[  424.088408] remoteproc remoteproc0: remote processor 4080000.remoteproc is now up
+[  425.689497] z17s-hb uptime=425 load=1.61/1.25/0.62
+[  427.200285] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  435.704459] z17s-hb uptime=435 load=1.51/1.24/0.62
+[  437.209882] ath10k_snoc 18800000.wifi: failed to start hw scan: -108
+[  445.797262] z17s-hb uptime=446 load=1.35/1.22/0.62
+[  451.214815] ath10k_snoc 18800000.wifi: failed to start hw scan: -108

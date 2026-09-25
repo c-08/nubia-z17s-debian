@@ -138,15 +138,38 @@ D:\adb\adb.exe devices           # 有输出 → 进 recovery/TWRP（或系统�
 `HS-USB Diagnostics 9091`，`Status` 是 **`Unknown`** —— 那是以前插过留下的记录，
 **不代表设备现在在位**。判据只有 `-PresentOnly` + `fastboot/adb devices`。
 
-### 5.2 三条通道（按优先级）
+### 5.2 三条通道（按优先级）—— ⚠️ 2026-09-25 实测更正
 
 | 通道 | 条件 | 做法 |
 |---|---|---|
-| **fastboot** | 屏幕出现 fastboot / 引导器界面 | `fastboot flash boot <37 MB 签名镜像>` |
-| **TWRP + adb** | `音量上 + 电源` 能进 TWRP（**最可靠，项目一直走这条**） | `adb push` 后 `dd if=/tmp/boot.img of=/dev/block/sde18 bs=4096` |
-| **EDL 9008** | 只剩 9008（要 firehose programmer / QFIL） | 最后手段，先试组合键 |
+| ~~fastboot~~ | ❌ **实测不可用，别在这里浪费时间** | 见下方"fastboot 为什么不行" |
+| **TWRP + adb** | `音量上 + 电源` 能进 TWRP | **唯一可用通道**：`adb push` 后 `dd if=/tmp/boot.img of=/dev/block/sde18 bs=4096` |
+| **EDL 9008** | 只剩 9008（要 firehose programmer / QFIL，本机没有） | 最后手段 |
 
-TWRP 侧硬约束（详见 [备份与恢复](备份与恢复.md)）：
+#### 🔴 「fastboot 为什么不行」—— 2026-09-25 实机定案
+
+设备确实能进 fastboot（`fastboot devices` → `5d6dc569 fastboot`，`getvar product` → `QC_Reference_Phone`），
+但这是一个**只答极少命令的精简 XBL fastboot**，**根本没有实现 `download:` / `flash:`**：
+
+```
+fastboot flash boot boot_w1_ath10k_signed.img
+  → Sending 'boot' (36409 KB)  FAILED (remote: 'unknown command')
+fastboot -S 8M flash boot …    → 同样 FAILED (remote: 'unknown command')   # 与分块大小无关
+fastboot reboot-bootloader     → FAILED (remote: 'unknown command')
+fastboot oem device-info / oem ? / getvar:serialno / getvar:current-slot
+                               → FAILED (remote: 'unknown command')
+fastboot getvar version/secure/partition-size:boot
+                               → FAILED (remote: 'GetVar Variable Not found')
+fastboot reboot recovery       → OKAY……但设备只是普通重启（没有真的进 recovery）
+```
+
+⚠️ **`reboot recovery` 回 `OKAY` 是假信号**：设备随后走正常启动流程 ⇒ 坏 boot ⇒ logo 循环。
+要进 TWRP，**只能人工按 `音量上 + 电源`**。
+
+⚠️ 还有一条副作用：`getvar partition-size:boot` 失败 ⇒ fastboot 会打印
+`skip copying boot image avb footer (boot partition size: 0…)`，那是**误导**，与签名无关。
+
+#### TWRP 侧硬约束（详见 [备份与恢复](备份与恢复.md)）
 
 ```bash
 # TWRP 是 toybox：dd 不支持 bs=1M、不支持 conv=fsync
@@ -173,14 +196,30 @@ adb shell "sync"
 ## 六、回退
 
 ```bash
-# fastboot
-D:\adb\fastboot.exe flash boot boot_orig_signed.img
-# 或 TWRP
-adb shell "dd if=/tmp/boot_orig_full64.img of=/dev/block/sde18 bs=4096"
+# 只有这一条通道（fastboot 不能刷，见 §5.2）
+adb push boot_orig_full64.img /tmp/boot.img
+adb shell "dd if=/tmp/boot.img of=/dev/block/sde18 bs=4096"
+adb shell "md5sum /dev/block/sde18"     # 必须等于 acf5c3da7bcfeabb64039caafa88c0a3
+adb shell "sync; reboot"
 ```
 
 设备侧另有 `/root/fwbackup/`（原模块、原 boot、回退脚本）。
 PC 侧长期备份见 [备份与恢复](备份与恢复.md)（`10-boot-sde18.img.gz`）。
+
+### 6.1 实战记录：2026-09-25 黑屏恢复（成功）
+
+| 步骤 | 结果 |
+|---|---|
+| 现状存档 | `adb shell md5sum /dev/block/sde18` → `227a4829ca9d8e3cd8ea3ba0a28222cc`（= 隔壁那版未签名的坏镜像） |
+| 分区几何 | `cat /sys/class/block/sde18/size` → `131072`（× 512 B = 64 MiB）；`by-name/boot → sde18` |
+| 推入 | `adb push boot_w1_ath10k_full64.img /tmp/boot_w1.img`（67 108 864 B，43.7 MB/s，1.5 s） |
+| 设备侧校验 | `md5sum /tmp/boot_w1.img` → `84c37378165ec191b023b63e5216f653` ✅ 与主机一致 |
+| 写入 | `dd if=/tmp/boot_w1.img of=/dev/block/sde18 bs=4096` → `16384+0 records out`，0.48 s |
+| 回读校验 | `md5sum /dev/block/sde18` → `84c37378165ec191b023b63e5216f653` ✅ |
+| 重启 | `sync; reboot` → **T+56 s** RNDIS + 串口枚举、`ping 192.168.137.2` 通 ✅ |
+
+关键时序（重启后）：`T+10~37 s` 只出现「USB 串行设备」（早期 ACM）→ `T+46 s` gadget 重枚举
+→ `T+56 s` RNDIS + 串口 + `usb0` 就绪。**别在 45 s 之前就判"没起来"。**
 
 ---
 

@@ -33,9 +33,12 @@
 
 **一句话**：先花 15 分钟做三条不花钱的（§3），再决定要不要动 W1；W1 走"换单文件"而不是"刷 boot"；C1b 换成手机热点形态；C1a 最后再说。
 
-> 📦 **进度（2026-09-25）**：W1 的 A/B 两处补丁**已打好并编译成功**，得到
-> `ath10k_core.ko`（549 552 B / md5 `e46e8e82…`），**ABI 预检通过（190/190 符号 CRC 全一致）**，
-> 现等"要不要部署"的决定 —— 部署需你在场（串口记录器要双击）。详见 §2.4.1 与工作区 `w1-out/构建说明.md`。
+> 📦 **进度（2026-09-25 夜，已上机实测）**：W1 补丁**已部署并持久化**（TWRP + `dd` 写入 boot，
+> 回读校验通过），重启后 `hwcrypto 0` + `key_hw_accel SW ok (drv ret=1)` ⇒ **软解路径确已打通**，
+> **WPA2 四次握手成功**。但**加密帧发不出去**（`unhandled tx completion status 5` ×9）⇒ AP 以
+> `4WAY_HANDSHAKE_TIMEOUT` 踢人 ⇒ 固件仍 assert（`RT:207a`）。**Wi-Fi 仍不可用。**
+> 结论与后续实验（含新发现的 `frame_mode` 旋钮）= §2.4.2 + 工作区 `w1-out/W1-实验结果.md`。
+> 🔴 现状：**保持 `nmcli radio wifi off`**（零崩溃、load 0.38）。
 
 ---
 
@@ -248,6 +251,50 @@ depmod $(uname -r)
 ```
 
 **对照原方案的"重编内核 + 刷 boot"**，这条路省掉的东西：§12 的 `CONFIG_RPMSG_QCOM_SMD` 闸门、`Image.gz + DTB×3` 拼装、**AVB 签名**、37 MB 写入 + 回读校验、以及"刷坏 boot 要 TWRP 救"的风险。**为了改一个 Wi-Fi 模块，这些都不值得付。**
+
+### 2.4.2 ★ 部署与实测结果（2026-09-25 夜，已上机）
+
+完整证据见 **[W1实验结果.md](W1实验结果.md)**（原始日志 `w1-attempt1-dmesg.txt` / `-journal.txt` 在工作区 `w1-out/`，设备侧另存 `/root/`）。
+**结论：补丁部署成功、软解路径证明打通，但 Wi-Fi 仍不可用 —— 卡在固件不发软件加密的帧。**
+
+**部署方式（唯一可用通道）**：TWRP（`音量上 + 电源`）→ `adb push` → `dd … of=/dev/block/sde18 bs=4096`
+→ 回读整分区 md5 = `84c37378165ec191b023b63e5216f653` ✅ → `sync; reboot`。
+⚠️ **fastboot 在本机不能刷分区**（实测 `flash`/`download` 全部 `unknown command`，见
+[boot镜像签名与恢复 §5.2](boot镜像签名与恢复.md)）。
+
+**成功的那一半**（三条硬证据）：
+
+```
+[   31.308988] WCN3990: SW crypto without raw mode, HW crypto disabled     ← 补丁 A 生效
+[   31.370925] htt-ver 3.50 … raw 0 hwcrypto 0                            ← nohwcrypt=true
+[  287.687197] key_hw_accel SW ok (drv ret=1)                             ← mac80211 真的走软件解密
+```
+
+⇒ 重启后 `/lib/modules/…/ath10k_core.ko` 仍是补丁版（initramfs 从 ramdisk 拷回，`e46e8e82…`），
+`cryptmode=1` 也持久；**WPA2 四次握手成功**（`WPA: Key negotiation completed [PTK=CCMP GTK=CCMP]`，三次重试全成功）。
+
+**失败的那一半**（同一个 boot 的日志）：
+
+```
+[  287.699] ath10k_snoc …: unhandled tx completion status 5        × 9
+[  290.738] wlan0: deauthenticated from a6:a9:30:d4:0c:ea (Reason: 15=4WAY_HANDSHAKE_TIMEOUT)
+[  296.006] EX:wlan_process:1:WLAN RT:207a:PC=b00c0098             ← 固件仍 assert（RT 从 1078 变 207a）
+```
+
+机制：`nohwcrypt=true` ⇒ 驱动在 TX 描述符上打 `NO_ENCRYPT`（`mac.c:3805` `ath10k_tx_h_use_hwcrypto`
+返回 false）⇒ **HL1.0 固件不认这个标记，把加密帧丢了**（状态码 5 未在该驱动定义范围内，
+`htt_rx.c:2974` 归为 DISCARD）⇒ AP 收不到我们的 msg4 ⇒ 踢人 ⇒ 拆除站点时固件 assert。
+即"软件加密"这条路**在本固件上走不通**，但失败点已从"装密钥即崩"推进到"握手成功、发不出加密帧"。
+
+**顺带发现（原方案没有的）**：`modinfo -p` 还有 `frame_mode: 0-raw / 1-native(默认) / 2-ethernet`，
+而 `core.c:2663-2700` 里 `frame_mode==RAW` 与 `cryptmode=1` 都要过 `RAW_MODE_SUPPORT` 这道门槛，
+且 `RAW_MODE` 会顺带 `ar->htt.max_num_amsdu = 1`（关掉 A-MSDU）。⇒ 上游正统的软解形态是
+**"RAW 数据面 + 软解"**，我们走的是厂商自创的"非 raw 软解"，这才是 TX 被丢的嫌疑点。
+要试得再放宽一道门槛（补丁 C）—— 见报告 §4 的 E1–E5 实验清单。
+
+**省掉刷机的技巧**：模块 `=m`，而 initramfs 只在开机时把 ramdisk 的 `/lib/modules` 拷进 rootfs
+⇒ **运行中直接换 `/lib/modules/.../ath10k_core.ko` + `modprobe -r ath10k_snoc; modprobe ath10k_snoc`
+即可试变体**，不必重做 boot 镜像。（⚠️ 历史上有过 `-r` 后 wlan0 不再出现的记录，第一次试要留退路。）
 
 ### 2.5 预期、风险与止损
 
