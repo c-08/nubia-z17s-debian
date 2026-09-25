@@ -33,6 +33,10 @@
 
 **一句话**：先花 15 分钟做三条不花钱的（§3），再决定要不要动 W1；W1 走"换单文件"而不是"刷 boot"；C1b 换成手机热点形态；C1a 最后再说。
 
+> 📦 **进度（2026-09-25）**：W1 的 A/B 两处补丁**已打好并编译成功**，得到
+> `ath10k_core.ko`（549 552 B / md5 `e46e8e82…`），**ABI 预检通过（190/190 符号 CRC 全一致）**，
+> 现等"要不要部署"的决定 —— 部署需你在场（串口记录器要双击）。详见 §2.4.1 与工作区 `w1-out/构建说明.md`。
+
 ---
 
 ## 1 五个必须先知道的事实
@@ -47,8 +51,12 @@
 | 4 | **`CONFIG_SOFTLOCKUP_DETECTOR` / `DETECT_HUNG_TASK` / `MAGIC_SYSRQ` / `PSTORE` 全部没有**（`KALLSYMS=y`、`DEBUG_FS=y`、`DYNAMIC_DEBUG=y` 有） | config | 取证开关**确实该加**；但它们是核心选项 → **必须刷 boot**；而 dyndbg 已可用，见 §3.2 |
 | 5 | boot 镜像要过 **AVB 签名**（`BootSignature.jar` + `verity.pk8` + `verity.x509.der`），且 `abootimg -k` 要求 `Image.gz + DTB×3` | `kernel/build-boot.sh`、`kernel/README.md` | 刷 boot 的**真实成本**比"dd 进去"高得多 → 又一个"W1 别刷 boot"的理由 |
 
-**前置条件**（原方案没提）：本仓库 `kernel/` 里**只有构建脚本和一份 config**，`common.sh` 与 `assets/`（`$ASSETS_DIR`、`$BUILD_DIR`、DTB 源、签名材料）都不在仓库里。
-→ W1 开工前先确认：**WSL 里那棵 6.12.95 源码树 + 上游构建环境还在**（上次重编内核时用过）。不在的话先恢复环境，别急着改代码。
+**前置条件**：本仓库 `kernel/` 里**只有构建脚本和一份 config**，`common.sh` 与 `assets/`（`$ASSETS_DIR`、`$BUILD_DIR`、DTB 源、签名材料）都不在仓库里。
+
+> ✅ **2026-09-25 已确认环境齐备**：WSL 里源码树 `/root/z17s-kbuild/linux-6.12.95`（带全部移植补丁）
+> 与 `O=` 构建树 `/root/z17s-debian/build/kernel-out` 都在，且后者与 `build/config-6.12.95+` 一致、
+> `Module.symvers` 完整 ⇒ **可增量编模块，不需要恢复环境全量重编**。构建脚本在
+> `/root/z17s-debian/scripts/build-kernel.sh`（上游包 `z17s-debian`）。
 
 ---
 
@@ -143,9 +151,54 @@ strings "$K" | grep -i "WCN3990\|cryptmode"
 
 因为 `CONFIG_ATH10K=m`，而且 **`ath10k` 不是启动必需模块**（网络入口是 gadget 的 RNDIS + 静态 IP）→ 换坏了最多"没有 Wi-Fi"，开机、`usb0`、SSH、串口**全都不受影响**，能当场回滚。`ath10k_snoc.ko` **不用换**（本次不动 `ath10k_core_create` 这类被 snoc import 的符号）。
 
-> 🔴 **重编前必须先恢复构建环境**：`/root/z17s-kbuild/linux-6.12.95` 目前是**干净源码树（无 `.config`、无 `Module.symvers`）**。
-> 产物在 `/root/z17s-kbuild/mods/lib/modules/6.12.95+/`（2026-09-19 14:32），运行内核配置备份在
-> `/root/z17s-kbuild/running.running.config`。`CONFIG_MODVERSIONS=y` ⇒ **没有正确的 `Module.symvers` 编出来的模块 CRC 是错的，上机会被内核直接拒载**（白跑一趟）。先用配置备份生成 `.config` 再编。
+> ✅ **构建环境现成（2026-09-25 实测，推翻上一版"必须先恢复 `.config` 并全量重编"的判断）**
+> `O=` 输出树 **`/root/z17s-debian/build/kernel-out` 完整存在**：`.config`（161 564 B，与
+> `build/config-6.12.95+` **逐字节相同**）、`Module.symvers`（731 262 B）、`kernel.release = 6.12.95+`，
+> 且 `kernel-out/source -> /root/z17s-kbuild/linux-6.12.95`（带全部移植补丁的源码树）。
+> 这正是产出**当前所刷 `boot-nx595j-debian13-signed.img`（2026-09-20 03:30）**的那次构建
+> ⇒ **只需增量编一个模块（约 40 秒），不必全量 `make modules`**。
+
+```bash
+K=/root/z17s-kbuild/linux-6.12.95
+O=/root/z17s-debian/build/kernel-out
+
+# 1) 保证源码树"干净"：O= 构建有硬闸门（见下方坑 1）
+make -C $K ARCH=arm64 mrproper
+
+# 2) 打上 §2.3 的 A/B 两处补丁，然后只编 ath10k
+make -C $K O=$O ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j"$(nproc)" \
+     M=$K/drivers/net/wireless/ath/ath10k modules
+# ★ 产物在【源码树】目录里，不在 O= 里：$K/drivers/net/wireless/ath/ath10k/ath10k_core.ko
+```
+
+**四个实测坑**（都真踩过，不是推测）：
+
+| # | 坑 | 处置 |
+|---|---|---|
+| 1 | `O=` 构建有硬闸门：srctree 存在 `.config` / `include/config/` / `arch/arm64/include/generated/` 任一即报 `The source tree is not clean` 并中止。⚠️ **`make -n` 干跑也会写入这些** | `make -C $K ARCH=arm64 mrproper`（**不会**删已改的 `core.c`/`mac.c`/`z17s_defconfig`，已验） |
+| 2 | `M=drivers/net/...`（**相对**路径）在 `O=` 下必失败 —— kbuild 按 **objtree** 解析，`kernel-out/` 里没有 `drivers/` | `M=` 写**绝对路径** |
+| 3 | 目录目标 `make ... drivers/net/wireless/ath/ath10k/` **什么都不编**（目录目标只编 built-in，ath10k 全是 `=m`） | 用 `M=… modules`，不要用目录目标 |
+| 4 | 产物位置反直觉：`M=` 是"外部模块"语义 ⇒ `.o`/`.ko` 落在**源码树**；`O=` 里那份仍是旧版 | 取 `$K/drivers/net/wireless/ath/ath10k/ath10k_core.ko`；源码树里这批 `.o` 被内核 `.gitignore` 覆盖，`git status` 仍干净 |
+
+> 📌 **两代模块并存（别拿错基线）**：已刷进 userdata 的 `rootfs-…ext4`（2026-09-18）里是**旧代**
+> （md5 `dcc87626…`，与 `/root/z17s-kbuild/mods/` 同一份）；`kernel-out` 与 boot.img 的 ramdisk 是**新代**
+> （md5 `1665de73…`）。**两代的同名导入符号 CRC 完全一致**（逐符号比对过 190/190），所以任一代都能当基线。
+> 设备上真正加载的是哪一代，只能上机 `md5sum` 现场确认。
+
+### 2.4.1 已编译产出（2026-09-25，**待部署**）
+
+| 文件 | 大小 | md5 | 说明 |
+|---|---|---|---|
+| `ath10k_core.ko` | 549 552 | `e46e8e82b5df7b3bc79db962143e726b` | ★ 含 A/B 两处补丁 |
+| `ath10k_core.ko.baseline` | 549 312 | `1665de738d810b21f39d40f80fd134cf` | 未打补丁的原样 |
+
+- `vermagic=6.12.95+ SMP preempt mod_unload modversions aarch64`（与基线逐字节相同）；`depends: mac80211,cfg80211,led-class,ath`
+- **ABI 预检：导入符号 190 = 190，CRC 不一致 0 处**；与**从已刷 rootfs 镜像里 `debugfs dump` 出来的那份**比对同样 0 处不一致
+  ⇒ `insmod` 不会被 `CONFIG_MODVERSIONS` 拒载
+- `strings` 可验到补丁自带字符串 `WCN3990: SW crypto without raw mode, HW crypto disabled`
+- 分支一定生效的**调用时序证据**：`ar->hw_rev` 在 `ath10k_core_create()`（`core.c:3634`，由 `snoc.c:1738` 传入）赋值，
+  而 `ath10k_core_init_firmware_features()` 在 `ath10k_core_probe_fw()`（`core.c:3456`）才被调用 —— 晚于前者
+- 完整构建/部署/回滚清单另见工作区 `w1-out/构建说明.md`
 
 ```bash
 # 0) 上机前先验兼容性（不替换就能判断会不会被拒）
