@@ -239,6 +239,36 @@ def cb_start(src, res, ud=None):
     cli.get_current_settings(gi_, 30, None, cb_settings, None)
 
 
+def _int2ip(n):
+    """GI hands back QMI IPv4 values as host-order uint32 -> dotted quad."""
+    n = int(n) & 0xFFFFFFFF
+    return "%d.%d.%d.%d" % ((n >> 24) & 0xFF, (n >> 16) & 0xFF,
+                            (n >> 8) & 0xFF, n & 0xFF)
+
+
+def _pfxlen(mask):
+    m = int(mask) & 0xFFFFFFFF
+    n = 0
+    while n < 32 and (m & (1 << (31 - n))):
+        n += 1
+    return n or 30
+
+
+def _setting(out, *names):
+    """First getter that exists and returns something non-None."""
+    for n in names:
+        f = getattr(out, n, None)
+        if f is None:
+            continue
+        try:
+            v = f()
+        except Exception:
+            continue
+        if v is not None:
+            return v
+    return None
+
+
 def cb_settings(src, res, ud=None):
     cli = S['wds']
     try:
@@ -248,25 +278,50 @@ def cb_settings(src, res, ud=None):
         return hold()
     L("[5] get_current_settings OK")
     show_getters(out, "wds.settings")
-    ip = None
-    for g in ("get_ipv4_address", "get_ipv4_gateway_address",
-              "get_ipv4_subnet_mask",
-              "get_ipv4_primary_dns_address", "get_ipv4_secondary_dns_address"):
-        try:
-            v = getattr(out, g)()
-        except Exception:
-            continue
-        if v is None:
-            continue
-        S[g[4:]] = v
+
+    S['ipv4_address'] = _setting(out, "get_ipv4_address")
+    S['gw'] = _setting(out, "get_ipv4_gateway_address")
+    S['mask'] = _setting(out, "get_ipv4_gateway_subnet_mask",
+                         "get_ipv4_subnet_mask")
+    S['dns1'] = _setting(out, "get_primary_ipv4_dns_address",
+                         "get_ipv4_primary_dns_address")
+    S['dns2'] = _setting(out, "get_secondary_ipv4_dns_address",
+                         "get_ipv4_secondary_dns_address")
+
+    print("", flush=True)
     if S.get('ipv4_address'):
-        print("", flush=True)
-        print(">>> ASSIGN:  ip addr add %s/%s dev rmnet_ipa0"
-              % (S['ipv4_address'], S.get('ipv4_subnet_mask', '?')))
-        print(">>> GATEWAY: %s    DNS: %s / %s"
-              % (S.get('ipv4_gateway_address'), S.get('ipv4_primary_dns_address'),
-                 S.get('ipv4_secondary_dns_address')), flush=True)
-        print("", flush=True)
+        A = _int2ip(S['ipv4_address'])
+        P = _pfxlen(S['mask']) if S.get('mask') else 30
+        G = _int2ip(S['gw']) if S.get('gw') else "?"
+        D1 = _int2ip(S['dns1']) if S.get('dns1') else "?"
+        D2 = _int2ip(S['dns2']) if S.get('dns2') else "?"
+        print(">>> CARRIER: IPv4 %s/%d   GW %s   DNS %s / %s"
+              % (A, P, G, D1, D2), flush=True)
+        print(">>>", flush=True)
+        print(">>> *** rmnet_ipa0 is ARPHRD_RAWIP with header_ops == NULL and",
+              flush=True)
+        print(">>>     needs_headroom = sizeof(rmnet_map_header) (QMAP).",
+              flush=True)
+        print(">>>     IPv4 must NOT go on rmnet_ipa0 -- stack an rmnet vnd:",
+              flush=True)
+        print(">>>", flush=True)
+        print(">>>   modprobe rmnet", flush=True)
+        print(">>>   ip link add link rmnet_ipa0 name rmnet0 type rmnet mux_id %d"
+              % MUX, flush=True)
+        print(">>>   ip link set rmnet0 up", flush=True)
+        print(">>>   ip addr add %s/%d dev rmnet0" % (A, P), flush=True)
+        print(">>>   ping -I rmnet0 %s" % G, flush=True)
+    else:
+        print(">>> NO IPv4 in current settings.", flush=True)
+        print(">>> Most common cause: radio is not online.  Check with",
+              flush=True)
+        print(">>>   qmicli -d qrtr://0 --dms-get-operating-mode", flush=True)
+        print(">>> and fix with", flush=True)
+        print(">>>   qmicli -d qrtr://0 --dms-set-operating-mode=online", flush=True)
+        print(">>> (start_network ends with GENERIC_NO_SERVICE / CM 2001 if",
+              flush=True)
+        print(">>>  the mode is still 'shutting-down').", flush=True)
+    print("", flush=True)
     hold()
 
 

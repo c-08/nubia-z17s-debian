@@ -262,3 +262,210 @@ persist/modem/dsp/vendor/system；`boot`/`userdata` 本次全程未动。
 | `DPM = QRTR service 2` | ❌ **DPM = service 47（port 61）**；service 1 = WDS（port 62） |
 | `lookup_service(47) == -1` ⇒ DPM 不存在 | ❌ `lookup_service()` 的参数是 **port**，语义反了 ⇒ 要用 `lookup_port(47)` |
 | `smp2p` 总线未注册 | ❌ `smp2p-lpass/mpss/slpi` 全部 bind 到 `qcom_smp2p`；IPA 的 8 条 device-link 全 `active` |
+
+---
+
+# 6 S1 实测：冻结点 = `icc_bulk_disable()`（10-01）
+
+## 6.1 做法
+
+`ipa_instr.py` 给 17 个函数插 84 条 `Z17SIPA` `pr_info`（每条后跟 `mdelay(300)` 等 ACM 控制台吐字），
+`O=` 增量编单模块 → **活系统热换**（`ipa` 是 `=m` 且不在 `/lib/modules`，重启即消失）。
+
+## 6.2 实测（串口 + `z17s-logwatch` 一致）
+
+死前**最后一行**：
+
+```
+Z17SIPA ipa_power_disable:134 pwroff: -> icc_bulk_disable(n=3)
+```
+
+之前每一级都被证明健康：`icc_bulk_enable ret=0`、`clk_prepare_enable ret=0`、
+两个 `ep_enable ret=0`（id=3 ch=5 / id=16 ch=8）、`gsi_channel_start` 内部全 `ret=0`、
+`ipa_endpoint_suspend` / `gsi_channel_suspend` `ret=0`、`clk_disable_unprepare` 正常返回。
+
+## 6.3 结论
+
+冻结点**不在** `ipa_open` / `ipa_runtime_resume`，而在
+**autosuspend → `ipa_runtime_suspend` → `ipa_power_disable` → `icc_bulk_disable()`**。
+该平台 interconnect 关断时同步总线停顿（零内核输出 + 看门狗 ~35s 复位）。
+
+## 6.4 ✅ 绕过法（已验证）
+
+```sh
+echo -1 > /sys/bus/platform/devices/1e40000.ipa/power/autosuspend_delay_ms   # 任何 link up 之前
+```
+
+永不 autosuspend ⇒ `ipa_power_disable` 永不执行 ⇒ `ip link set rmnet_ipa0 up` **rc=0**，
+接口起来、端点 3/16 使能、无冻结。实测 `runtime_status=active`、
+`runtime_active_time=1123250ms` / `runtime_suspended_time=1ms`（几乎从未挂起）。
+
+---
+
+# 7 G4 数据面：链式定位（10-01）
+
+## 7.1 正确的数据面模型（长期被忽略的一环）
+
+`ipa_modem.c ipa_modem_netdev_setup()`：
+
+```c
+netdev->header_ops = NULL;
+netdev->type       = ARPHRD_RAWIP;
+netdev->needed_headroom = sizeof(struct rmnet_map_header);
+/* endpoint is configured for QMAP */
+```
+
+且 msm8998 用的是 `data/ipa_data-v3.1.c`（`ipa_main.c:649` 把 `qcom,msm8998-ipa` 映射到
+`ipa_data_v3_1`，**不是 v3.5.1**），其中 `AP_MODEM_TX = ch5/ep3`、`.qmap = true`。
+
+⇒ `rmnet_ipa0` 只是 **QMAP 中间层**，L3 必须叠 `rmnet0`：
+
+```sh
+ip link add link rmnet_ipa0 name rmnet0 type rmnet mux_id 0
+```
+
+## 7.2 `ETH_P_MAP` 闸门 —— 解释了"dropped 54"
+
+`ipa_start_xmit()` 里：
+
+```c
+	endpoint = ipa->name_map[IPA_ENDPOINT_AP_MODEM_TX];
+	if (endpoint->config.qmap && skb->protocol != htons(ETH_P_MAP))
+		goto err_drop_skb;        /* stats->tx_dropped++ */
+```
+
+`rmnet` 驱动的 `rmnet_egress_handler()` 会把 `skb->protocol` 改成 `ETH_P_MAP`；
+直接把 IP 配在 `rmnet_ipa0` 上（早期的 `ipa_ping_now.sh`）**必然全丢**。
+
+## 7.3 现象（叠好 rmnet0 之后）
+
+| 项 | 值 |
+|---|---|
+| `rmnet0` | `inet 10.100.58.37/30`，`UP`，TX 75 pkt / 0 dropped |
+| `rmnet_ipa0` | **TX packets=2 bytes=168 dropped=54**，**RX=0** |
+| `tc -s qdisc show dev rmnet_ipa0` | **backlog 6760b 93p**（队列被停、93 个包卡在 qdisc） |
+| `/proc/interrupts` | `gsi` = **15**（ping 前后**完全不变**）、`ipa` = **1** |
+
+⇒ **IPA 从不上报 TX 完成**（没有 IEOB 中断）⇒ 包发不出去。
+
+## 7.4 为什么"停"了就再也起不来
+
+1. `ipa_endpoint_skb_tx()`：`trans = ipa_endpoint_trans_alloc(...)` 返回 NULL ⇒ `-EBUSY`
+2. `trans_alloc` 的失败点在 `gsi_trans.c`：
+   ```c
+   if (!gsi_trans_tre_reserve(trans_info, tre_count)) return NULL;
+   ```
+   `tre_avail` 只在**事务完成**时归还；没有完成 ⇒ 迟早耗尽。
+3. `ipa_start_xmit()` 拿到 `-EBUSY`（≠`-E2BIG`）⇒ `return NETDEV_TX_BUSY`，
+   **队列停在 `netif_stop_queue()` 之后没被唤醒**。
+4. 唯一的唤醒路径是 `ipa_modem_resume()` → `queue_pm_work()` → `ipa_modem_wake_queue_work()`
+   → `netif_wake_queue()`。而设备因 autosuspend=−1 **永远 active、永不 resume**
+   ⇒ **队列永久停摆**（qdisc 越积越多）。
+
+## 7.5 为什么这次连 `down` 都锁死整机（新）
+
+`gsi.c`：
+
+```c
+static void gsi_channel_trans_quiesce(struct gsi_channel *channel)
+{
+	trans = gsi_channel_trans_last(channel);
+	if (trans) {
+		wait_for_completion(&trans->completion);   /* ← 无超时 */
+		gsi_trans_free(trans);
+	}
+}
+```
+
+而它被 `__gsi_channel_stop()` 在**最开头**调用：
+
+```c
+	/* Wait for any underway transactions to complete before stopping. */
+	gsi_channel_trans_quiesce(channel);
+```
+
+`ip link set rmnet_ipa0 down` → `ipa_stop` → `ipa_endpoint_disable_one(tx)`
+→ `gsi_channel_stop` → `__gsi_channel_stop` → **在 `rtnl` 下无限等那两个永不完成的事务**。
+
+实测时间线（10-01，串口）：
+
+| t (uptime) | 事件 |
+|---|---|
+| 1515.8 | `Z17SI2 I2 begin A=10.100.58.37/30 GW=10.100.58.38` |
+| 1515.9 | `Z17SI2 I2 del rmnet0 rc=0` |
+| — | 执行 `ip link set rmnet_ipa0 down` ⇒ **再无任何标记** |
+| 1543 → 1704 | `load` 从 **1.63 线性涨到 16.76**（≈ +1/10s） |
+| 全程 | `z17s-hb` 心跳继续 ⇒ **CPU0 活着 ⇒ 看门狗不跳 ⇒ 只能断电重启** |
+| — | ssh `banner exchange` 超时 ⇒ rtnl 被占，网络相关任务全部堆死 |
+
+## 7.6 上游从来没验证过 msm8998 的 IPA 数据面
+
+原始补丁（AngeloGioacchino Del Regno, 2021, `linux-netdevbpf`）作者自述：
+
+> "Since the userspace isn't entirely ready ... for data connection ... it was possible to
+> **only partially test** this series. Specifically, **loading the IPA firmware and setting up
+> the interface went just fine** ..."
+
+⇒ "接口能起来 + modem 不崩"就是上游的全部结论，**G4 属于无人区**。
+
+### 与原始补丁的实质差异（候选修因）
+
+| 字段 | 原始 msm8998 补丁 | 现在 6.12.95 的 v3.1 数据 |
+|---|---|---|
+| `AP_COMMAND_TX.seq_type` | `IPA_SEQ_DMA_ONLY` | `IPA_SEQ_DMA`（等价改名，✅ 无碍） |
+| **`AP_MODEM_TX.seq_type`** | **`IPA_SEQ_2ND_PKT_PROCESS_PASS_NO_DEC_UCP`** | **`IPA_SEQ_2_PASS_SKIP_LAST_UC`** |
+| `AP_MODEM_TX.seq_rep_type` | （当时字段不存在） | **缺失**；sdm845 的 v3.5.1 有 `IPA_SEQ_REP_DMA_PARSER` |
+
+⚠️ 现在的 v3.1 数据还多了 `rx.buffer_size=8192` / `aggr_time_limit=500`（原补丁没有），
+像是**从 sdm845 的 v3.5.1 表抄过来的**，`seq_type` 很可能是被一起抄错了。
+
+---
+
+# 8 🔴 新红线（务必记牢）
+
+1. 🔴 **`ip link set rmnet_ipa0 down` 与 `rmmod ipa` 现在都会锁死整机**（只要 TX 通道有未完成事务）。
+   一旦要换模块：**先干净重启**（`ipa` 不在 `/lib/modules`，重启即无），再直接 `insmod` 新模块，
+   **不要 down、不要 rmmod**。
+2. 🔴 `autosuspend_delay_ms = -1` 必须在**任何 link up 之前**写（每次 insmod 后都要重写）。
+3. 🔴 只要 TX 队列被停过（`tc` 显示 backlog>0），这机器就只能断电重启 —— **没有软复位通道**。
+
+---
+
+# 9 下一步（重启后照做，零 rmmod）
+
+```sh
+# PC 侧：确认串口记录器在录（serial-log.status 的 pc_time 是新的）
+# 设备：干净重启后 ipa 未加载 —— 直接上第二遍仪器化模块
+insmod /root/ipa-instr2.ko                                     # 已推送，sha256 fc396b2f...
+echo -1 > /sys/bus/platform/devices/1e40000.ipa/power/autosuspend_delay_ms
+dmesg | grep -E "ipa 1e40000|Z17SIPA" | tail -30               # 记下 isr_ieob 是否出现
+python3 /root/qmi_up.py 3gnet 3 16 1 0 3600 &                  # G3：保持 PDP
+ip link set rmnet_ipa0 up
+ip link add link rmnet_ipa0 name rmnet0 type rmnet mux_id 0
+ip link set rmnet0 up; ip addr add 10.100.58.37/30 dev rmnet0
+ip route add 10.100.58.38/32 dev rmnet0
+ping -c 4 -W 2 -I rmnet0 10.100.58.38
+dmesg | grep Z17SIPA2 | tail -40                               # ★ 关键读数
+```
+
+判读：
+
+- `isr_ieob` **总共只在 setup 阶段出现、ping 时一条没有** ⇒ 坐实"IPA 不完成 AP_MODEM_TX 事务"
+  ⇒ 下一步改 `AP_MODEM_TX.seq_type` / 补 `seq_rep_type`
+- 出现 `tre_reserve FAIL need=1 avail=0` ⇒ 坐实 §7.4 的 TRE 耗尽
+- 出现 `xmit pm_get ret=...` ⇒ 另有一条 `pm_runtime_get()<1` 的独立问题
+
+**收工：直接断电重启（不要 down / 不要 rmmod）。**
+
+## 9.1 仪器化产物与还原
+
+| 文件 | 说明 |
+|---|---|
+| `_g3/build/ipa-instr2.ko` | 第二遍（TX/完成路径）模块，sha256 `fc396b2f…`，已推送 `/root/ipa-instr2.ko` |
+| `_g3/build/ipa-instr.ko` | 第一遍（S1）模块 |
+| `_g3/build/ipa-pristine.ko` | 干净对照 |
+| `_g3/ipa_instr.py` / `ipa_instr2.py` / `fix_gsi_macro.py` | 打桩脚本 |
+| WSL 源码树 `drivers/net/ipa/*.c.orig` / `*.orig2` | 还原备份（`.orig` 才是原始） |
+
+⚠️ **编译 arm64 模块必须带 `ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-`**；
+补丁里有 `\n` 时**不要用 shell heredoc 写 Python**（转义会被吃掉），写成脚本文件再跑。
