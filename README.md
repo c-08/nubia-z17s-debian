@@ -18,7 +18,7 @@
 | 蓝牙 | ✅ | 设备树硬编码的 NV 与 persist 一致，无需改动 |
 | 音频 | ✅ | `card 0: Nubia-Z17S` 已注册 |
 | Wi-Fi | ❌ 不可用 | 能连上，但**固件会崩溃**。2026-09-25 已把最后一条路（`ath10k` 软解）**实测打完**：软解确实生效、WPA2 握手成功，但固件不肯发软件加密的帧 ⇒ 仍不可用。见 [docs/W1实验结果.md](docs/W1实验结果.md) |
-| 蜂窝（手机卡） | ⚠️ **大幅推进，仍未通** | 2026-09-26 上机实测：`ipa.ko` 加载**满分成功**（`IPA driver setup completed successfully` + 60 s 无复位）、`rmnet_ipa0` 出现、modem 一条命令拉回 `online` 后 **LTE 注册成功在中国联通 460-01**、SIM 可用。卡在 G3：`--wds-start-network` 报 `InvalidOperation(70)` ⇒ 疑为 IPA↔modem 数据路径未建。见 [docs/蜂窝G1G2实测.md](docs/蜂窝G1G2实测.md) |
+| 蜂窝（手机卡） | ⚠️ **数据呼叫已通，数据面未通** | 2026-09-30 上机实测：**G3 通关** —— 单进程 libqmi 连做 DPM-open + WDS-bind + WDS-start，`start_network` 成功、拿到联通真实地址 `10.118.65.25/30`（网关 `.26`，DNS 120.80.80.80 / 221.5.88.88）。**只剩数据面**：`ip link set rmnet_ipa0 up` 会**硬挂起整机**（零内核输出 + 看门狗约 35 s 复位，复现 2/2），根因锁定 `ipa_runtime_resume` 的 `ipa_endpoint_resume()`。见 [docs/蜂窝G3与IPA数据面.md](docs/蜂窝G3与IPA数据面.md) |
 | 摄像头 / NFC / 指纹 / 传感器 | ❓ | 未验证 |
 | 显示 | ⚠️ | 下半屏重叠（上游已知缺陷） |
 
@@ -44,6 +44,7 @@
 | **⭐ Wi-Fi 到底卡在哪** —— W1（软解）上机实测全过程：三条硬证据、时间线、失败机制、剩余实验清单 | [docs/W1实验结果.md](docs/W1实验结果.md) |
 | **⭐ 手机卡到底能不能救** —— 可行性评估：证据链、三道门、逐日计划、风险止损 | [docs/蜂窝可行性评估.md](docs/蜂窝可行性评估.md) |
 | **⭐ 手机卡实测到哪一步了** —— G1/G2 上机全过程：IPA 满分通过、modem 拉回 online、LTE 注册成功、G3 卡点与死前现场 | [docs/蜂窝G1G2实测.md](docs/蜂窝G1G2实测.md) |
+| **⭐⭐ 手机卡最新进展（G3 已通）** —— 单进程 libqmi 三步连做拿到联通真实 IP；`ip link set rmnet_ipa0 up` 硬挂起的零日志尸检与源码级根因；下一步仪器化热换方案 | [docs/蜂窝G3与IPA数据面.md](docs/蜂窝G3与IPA数据面.md) |
 | **重编内核** —— 必改的配置项、编译产物校验 | [kernel/README.md](kernel/README.md) |
 
 > 全部文档为中文，按"**症状 → 判据 → 根因 → 修法**"组织，每个结论都带实测数据。
@@ -94,7 +95,12 @@
 │   ├── install-on-device.sh    把 device/ 一键部署到手机
 │   ├── install-logwatch.sh     部署三层日志与取证体系（幂等，可重复跑）
 │   ├── backup-system.sh        设备侧备份 T1（boot + persist + 配置 + 包列表，20 秒）
-│   └── flash-boot-cgroupbpf.sh 安全刷 boot 分区（备份 → 写入 → 回读校验 → 装模块）
+│   ├── flash-boot-cgroupbpf.sh 安全刷 boot 分区（备份 → 写入 → 回读校验 → 装模块）
+│   └── cellular/               手机卡数据通路工具（见 docs/蜂窝G3与IPA数据面.md）
+│       ├── qmi_up.py           ⭐ 单进程 libqmi：DPM-open + WDS-bind + WDS-start 一次连通
+│       ├── qrtr_services.py    枚举 modem 上全部 QRTR 服务（只读）
+│       ├── g3_linkup.sh        ⚠️ 危险：`ip link set rmnet_ipa0 up` 单变量实验（每步 sync + kmsg 标记）
+│       └── probe_qrtr.py       QRTR 设备打开方式的探针（GI 绑定避坑用）
 ├── kernel/
 │   ├── README.md               内核重编要点（必改项 + 产物校验）
 │   ├── build-*.sh              上游构建脚本
@@ -103,6 +109,7 @@
     ├── 项目总览.md             ⭐ 一页看完：项目地址 + 设备信息 + Wi-Fi/蜂窝为什么修不好
     ├── 蜂窝可行性评估.md       ⭐ 手机卡上网：从"无解"改判为"值得一试"（证据 + 三道门 + 逐日计划）
     ├── 蜂窝G1G2实测.md         ⭐ 手机卡上机实测：IPA 满分通过、modem 拉回 online、LTE 注册成功、G3 卡点
+    ├── 蜂窝G3与IPA数据面.md    ⭐⭐ 最新：G3 通关（单进程 libqmi 拿到联通真实 IP）+ `rmnet_ipa0 up` 硬挂起尸检与根因
     ├── boot镜像签名与恢复.md   🔴 改 boot 前必读：改了就必须重签，否则黑屏；含本地验签与恢复通道
     ├── W1实验结果.md            ⭐ Wi-Fi 软解上机实测：成功的那一半与失败的那一半（含日志证据）
     ├── WiFi与蜂窝修复方案.md   Wi-Fi 软解 / 蜂窝绕行的方案评审与实施清单（含"只换 .ko，不刷 boot"）
