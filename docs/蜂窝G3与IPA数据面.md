@@ -469,3 +469,95 @@ dmesg | grep Z17SIPA2 | tail -40                               # ★ 关键读�
 
 ⚠️ **编译 arm64 模块必须带 `ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-`**；
 补丁里有 `\n` 时**不要用 shell heredoc 写 Python**（转义会被吃掉），写成脚本文件再跑。
+
+---
+
+# 10 🔴🔴 G4 真正根因（10-01 二次上机）：`insmod ipa` 把 modem 固件逼崩
+
+## 10.1 决定性日志（`/var/log/z17s-kmsg/kmsg-cbc45795.log`）
+
+```
+[512.26] qcom-q6v5-mss 4080000.remoteproc: MBA booted without debug policy, loading mpss
+[514.18] ipa 1e40000.ipa: received modem running event
+[514.19] remoteproc remoteproc0: remote processor 4080000.remoteproc is now up
+[468.99] qcom-q6v5-mss: fatal error received:
+         ipa_sio.c:2107: IPA Assert: ipa_ipfltr.init_done == TRUE failed: Init message f
+[510.68] 同上（crash #2）
+[554.19] 同上（crash #3）
+```
+
+modem 固件在 **IPA 断言**上崩了 **3 次（crash loop）**：**IP filter 表没有初始化**
+（`ipa_ipfltr.init_done != TRUE`，在处理 "Init message" 时失败）。后果：
+
+- `modem_ready` / `uc_ready` 永不同时为真 ⇒ **`rmnet_ipa0` 根本不会被创建**
+- QMI 客户端全部 `QMI protocol error (3): 'Internal'`；QRTR **node 0 从 40 个服务掉到 2 个**
+- `--wds-start-network` 报 `endpoint hangup`
+
+## 10.2 🔑 `rmnet_ipa0` 是"握手完成"的指示灯（源码级）
+
+```c
+/* ipa_qmi.c:145 */
+static void ipa_qmi_ready(struct ipa_qmi *ipa_qmi)
+{
+	if (!ipa_qmi->modem_ready || !ipa_qmi->uc_ready)   /* INIT_DRIVER 响应 + DRIVER_INIT_COMPLETE */
+		return;
+	...
+	ret = ipa_modem_start(ipa);      /* → alloc_netdev("rmnet_ipa%d") + register_netdev */
+}
+```
+
+⇒ **网卡在不在，就等于"AP↔modem IPA QMI 握手有没有走完"**。以后先用它判断，比猜快得多。
+
+mainline 的 `ipa_init_modem_driver_req` 报文里**是带** `hdr_tbl_info`、`v4/v6_route_tbl_info`、
+`v4/v6_filter_tbl_start` 的 —— 上游"想"告诉 modem 滤波器表的位置，但 **msm8998 的 modem 固件
+仍然在处理这条消息时断言**。这与该系列作者自述"数据面未验证"吻合：
+**上游对 "IPA v3.1 + msm8998 modem" 这一组合从没跑通过。**
+
+## 10.3 顺序决定成败（**务必记住**）
+
+| 顺序 | 结果 |
+|---|---|
+| **modem online → insmod → pin autosuspend → 起 PDP → `ip link set rmnet_ipa0 up`** | ✅ 网卡出现、PDP 成功拿到 IP（`10.158.175.64/25`） |
+| 起 PDP → insmod（❌ 把 QMI 提到前面"让 modem 服务先就位"） | ❌ `start_network` 报 `endpoint hangup` → modem 崩 → 之后**再也建不出网卡** |
+
+⇒ **IPA 必须先于"数据呼叫"就位**；而且极可能还得**先于 modem 启动**（我们每次 insmod 时 modem
+早已在跑，IPA 初始化当着 modem 的面重配硬件 ⇒ modem 断言）。
+
+## 10.4 ❌ modem 一崩，`rmmod` 也别想（SRCU 死锁）
+
+```
+pid=6896 rmmod  D  __synchronize_srcu
+  ipa_remove → ipa_deconfig → ipa_modem_deconfig → qcom_unregister_ssr_notifier
+    → srcu_notifier_chain_unregister → synchronize_srcu        ← 卡死
+pid=68   kworker/u33:1+rproc_recovery_wq  D  ipa_cmd_pipeline_clear_wait  ← 未完成的 modem 恢复工作
+```
+
+pass-3 给 `gsi_channel_trans_quiesce()` 加的 3s 超时**救不了这一条**（卡在 SRCU，不是 quiesce）。
+⇒ **只要 modem 崩过，`rmmod` 就永久阻塞，只能断电重启。**
+
+## 10.5 下一次实验的顺序（已想清楚）
+
+```
+1) modem online（--dms-set-operating-mode=online）→ 确认 registered
+2) insmod /root/ipa-instr3.ko [z17s_seq=N z17s_rep=M]     ← IPA 先就位
+3) 等 probe 走完：dmesg | grep "IPA driver setup completed successfully"
+4) echo -1 > .../1e40000.ipa/power/autosuspend_delay_ms   ← 任何 link up 之前
+5) ★ 重启 modem：echo stop  > /sys/class/remoteproc/remoteproc0/state
+                 echo start > /sys/class/remoteproc/remoteproc0/state
+   让 modem 在"IPA 已就位"的世界里启动 —— 本轮新提出的关键单变量
+6) 轮询 rmnet_ipa0 出现（≤60s）；dmesg | grep -a "IPA modem start\|Assert" 看握手是否完成
+7) 起 PDP（qmi_up2.py）→ 拿 CARRIER
+8) link up → 叠 rmnet0 → 配 L3 → ping
+```
+
+**判据**：出现 `IPA modem start completed successfully` = 握手走完；若再出现
+`IPA Assert: ipa_ipfltr.init_done` = 顺序仍不对，需改 DTS（`qcom,gsi-loader = "modem"`，
+要重签 boot，见 `boot镜像签名与恢复.md`）。
+
+## 10.6 本轮脚本 bug（下次别犯）
+
+1. `ping ... | tail -3; PRC=$?` → 取到的是 **`tail` 的状态** ⇒ 假阳性"成功"
+   （**必须去掉管道**：`ping ... > f 2>&1; PRC=$?`）
+2. `insmod` 后**没等 `rmnet_ipa0` 出现**（probe 走完才 `register_netdev`）⇒ `Cannot find device`
+3. `pgrep -f "[q]mi_up2"` **自匹配 ssh 命令行**（命令行里含 `qmi_up2.py`）⇒ PDP 根本没起
+   ⇒ 改用 `ps -eo args | grep -c '^python3 /root/qmi_up2.py'`
