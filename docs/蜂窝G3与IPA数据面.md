@@ -561,3 +561,100 @@ pass-3 给 `gsi_channel_trans_quiesce()` 加的 3s 超时**救不了这一条**�
 2. `insmod` 后**没等 `rmnet_ipa0` 出现**（probe 走完才 `register_netdev`）⇒ `Cannot find device`
 3. `pgrep -f "[q]mi_up2"` **自匹配 ssh 命令行**（命令行里含 `qmi_up2.py`）⇒ PDP 根本没起
    ⇒ 改用 `ps -eo args | grep -c '^python3 /root/qmi_up2.py'`
+
+---
+
+# 11 🔴🔴🔴 终极根因（10-08 定位）：DT 缺 `qcom,gsi-loader`，AP 抢在 modem 之前 init IPA
+
+## 11.1 决定性证据链
+
+pass-4（insmod 后重启 modem）实测 —— modem 这次**不再 IPA 断言**，而是被 **AP 主动 force stop**：
+
+```
+[1333.36] ipa 1e40000.ipa: received modem running event
+[1373.37] qcom-q6v5-mss: fatal error received: sys_m_smsm_mpss.c:285:APPS force stop
+```
+
+`APPS force stop` 是 modem 固件侧 SMSM 状态机代码（`sys_m_smsm_mpss.c`），
+含义 = **AP 通过 SMEM 通知 modem "IPA 时钟没开 / 状态不对"，modem 自停**。
+与上一轮的 `ipa_sio.c:2107 ipa_ipfltr.init_done`（IP filter 表未初始化）是**同源**的两种表现。
+
+## 11.2 真正的病根在 DTS（不是顺序，顺序只是表象）
+
+本机 IPA 节点（`/proc/device-tree/soc@0/ipa@1e40000`）的属性里：
+
+```
+qcom,gsi-loader  不存在
+modem-init       不存在
+```
+
+而主线 `ipa_firmware_loader()` 的 legacy 逻辑是：
+
+```c
+modem_init = of_property_read_bool(dev->of_node, "modem-init");
+ret = of_property_read_string(dev->of_node, "qcom,gsi-loader", &str);
+if (ret == -EINVAL) {            /* 新属性不存在 => legacy */
+    if (modem_init) return IPA_LOADER_MODEM;
+    goto out_self;               /* 都没有 => 走 SELF */
+}
+...
+out_self:
+    if (qcom_scm_is_available()) return IPA_LOADER_SELF;
+```
+
+⇒ 本机 = **`IPA_LOADER_SELF`**：AP 用 TrustZone 自己加载 GSI 固件，**在 probe 阶段就 `ipa_setup()`**：
+
+```c
+if (loader == IPA_LOADER_MODEM) goto done;   /* 等 modem 的 setup-ready 中断 */
+if (loader == IPA_LOADER_SELF) {
+    ret = ipa_firmware_load(dev);            /* AP 自己加载固件 */
+}
+ret = ipa_setup(ipa);                        /* 立即 setup，不等 modem */
+```
+
+## 11.3 为什么错了
+
+msm8998 是**手机**，它的 modem 固件是 Android 时代产物，**按"modem 自己做 GSI init、AP 等它"
+的协议跑**。而主线 IPA 因为 DTS 漏了 `qcom,gsi-loader`，误判为 SELF，**AP 抢先 setup**，
+两边对"谁负责 GSI init / 谁先就位"理解不一致 ⇒ modem 崩溃（Assert / force stop）。
+
+对比参考平台（数据面验证可用的）：
+- `sc7180-trogdor-lte-sku.dtsi`：`qcom,gsi-loader = "modem";`（注释明说"无 QHEE，modem 补 GSI init，AP 等它"）
+- `sdm845-lg-common.dtsi` / `sdm845-cheza.dtsi`：`qcom,gsi-loader = "modem";`
+- `sdm845-oneplus` / `beryllium`（PoC 手机）：`qcom,gsi-loader = "self";`（数据面未验证）
+
+**msm8998 全平台（包括本机 nx595j）都漏了 `qcom,gsi-loader`** ⇒ 全部 fallback 到 SELF。
+这就是"上游从没跑通 msm8998 数据面"的**确切技术原因**。
+
+## 11.4 ✅ 修复方案
+
+在 `arch/arm64/boot/dts/qcom/msm8998-nubia-nx595j.dts` 的 `&ipa` 覆盖里加一行：
+
+```dts
+&ipa {
+	status = "okay";
+	memory-region = <&ipa_fw_mem>;
+	firmware-name = "qcom/msm8998/nubia/ipa_fws.mbn";
++	qcom,gsi-loader = "modem";     /* ← AP 等 modem 的 SMP2P setup-ready 中断再 ipa_setup() */
+};
+```
+
+**代价**：改 DTS 必须重编 dtb + **重签 boot.img**（本机改 boot 任何字节都必须重签名，否则黑屏）。
+这是"刷 boot"级操作，见 `boot镜像签名与恢复.md`。
+
+## 11.5 待验证：`"modem"` vs `"skip"`
+
+- `"modem"`：AP 等 modem 的 `ipa-setup-ready` SMP2P 中断再 `ipa_setup()` —— 最贴合 msm8998 modem 固件
+- `"skip"`：GSI 固件已由 bootloader/TrustZone 提前加载，AP 跳过加载、但仍**立即** `ipa_setup()`
+  （见 11.2 的代码：SKIP 分支直接掉到 `ipa_setup()`，**不会**等 modem）
+
+⇒ **应该试 `"modem"`**。`"skip"` 只解决"固件加载"这一步，不解决"AP 抢先 setup"这个根本矛盾。
+
+## 11.6 本轮顺序实验结论（pass-4 已证伪"重启 modem 能救"）
+
+| 尝试 | 结果 |
+|---|---|
+| modem 先起，AP 后 insmod（SELF 抢先 setup） | modem Assert（ipfltr.init_done） |
+| insmod 后重启 modem（modem 在 IPA 就位后启动） | modem `APPS force stop`（SMSM 状态不对） |
+
+⇒ **纯软件时序救不了**，必须改 DTS 走 modem-init 协议。这是 G4 的终点：根因已定位，修复要动 boot。
