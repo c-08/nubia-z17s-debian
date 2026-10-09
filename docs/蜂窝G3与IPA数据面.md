@@ -737,3 +737,51 @@ msm8998 的 modem 固件在 modem-init 模式下**不主动发 setup-ready/clock
 - `ipa-nosusp.ko`（forbid 补丁）insmod 后 `control=on` 不冻死
 - modem `running` 稳定不崩
 - 卡在握手死锁，等进一步研究
+
+---
+
+# 13 📚 msm8998 原厂 4.4 IPA 握手协议（研究结论，10-09）
+
+## 13.1 原厂 IPA 节点（Razer Cheryl，MSM8998 v2.1，dtsdump 实证）
+
+```dts
+qcom,rmnet-ipa {
+	compatible = "qcom,rmnet-ipa3";
+	qcom,ipa-loaduC;              /* AP 加载 uC */
+};
+qcom,ipa@01e00000 {
+	compatible = "qcom,ipa";      /* 不是主线的 qcom,msm8998-ipa */
+	qcom,use-gsi;                  /* BAM + GSI */
+	qcom,modem-cfg-emb-pipe-flt;  /* ★ modem 配置嵌入式 pipe filter */
+	qcom,ipa-hw-ver = <0xb>;       /* IPA v3.1 */
+	qcom,ee = <0x0>;
+	smp2pgpio_map_ipa_1_out / _in; /* GPIO 映射，非 smp2p */
+	ipa_smmu_ap / wlan / uc;       /* 三个 SMMU context bank */
+};
+qcom,ipa_fws@1e08000 { compatible = "qcom,pil-tz-generic"; qcom,pas-id = <0xf>; };
+```
+
+## 13.2 核心结论（G4 最终定性）
+
+**主线对 msm8998 的 IPA 支持，数据面是结构性不完整的：**
+
+1. 原厂模型 = **AP 加载 uC + modem 配置嵌入式 pipe filter**（`qcom,modem-cfg-emb-pipe-flt`）
+2. 主线驱动**没有 "modem 配置 filter" 这个概念** —— filter 表由 AP 全权 `ipa_table_setup()`
+   配置，于是 msm8998 modem 固件在处理 IPA init 消息时 `ipa_ipfltr.init_done != TRUE`
+   → 断言崩溃（SELF）或 force stop（时序）
+3. 主线的 `ipa-setup-ready` / `ipa-clock-query` 两个 SMP2P 中断，在原厂 msm8998 **根本不存在**
+   （原厂用 `smp2pgpio_map_ipa_1_out/in` GPIO 映射）→ 这就是 modem-init 下这两个中断
+   计数恒为 0、握手死锁的根本原因
+
+## 13.3 影响与结论
+
+要跑通数据面，需**移植 "modem 配置嵌入式 filter" 协议到主线**（filter 共享内存布局 +
+modem 侧 QMI/filter 交互 + smp2pgpio→smp2p），工作量大，非本阶段可完成。
+
+**阶段性结论**：msm8998 + 主线 IPA 的蜂窝数据面是**上游未完成功能**。我们的排查已把它从
+"玄学"推进到**确切的协议缺口**（缺 modem-cfg-emb-pipe-flt 交互），并固化了以下成果：
+
+- S1 冻死点（icc_bulk_disable）＋ pm_runtime_forbid 绕过
+- rmnet_ipa0 = QMAP 中间层，需叠 rmnet0；ETH_P_MAP 闸门
+- 握手指示灯（rmnet_ipa0 是否存在 = 握手走完没有）
+- gsi-loader=modem 已刷入（解决 modem 崩溃）
