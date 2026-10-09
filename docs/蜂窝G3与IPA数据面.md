@@ -907,3 +907,56 @@ handler（modem 请求时，把规则写到 filter 表）。需补 QMI 消息结
 看 modem 是否不再 `ipa_ipfltr.init_done` 断言、`rmnet_ipa0` 能否出现。
 
 这是成本最低、信息量最大的一枪。
+
+---
+
+# 16 🏁 G4 最终定性：主线 SMP2P 握手与 msm8998 modem 固件对不上（10-09）
+
+## 16.1 Step 2（主动 notify）实测
+
+干净开机 insmod `ipa-step2.ko`（forbid + Step1a filter handler + Step2 主动 notify）：
+
+- `IPA driver setup completed successfully` ✅（SELF 模式 setup 成功）
+- 重启 modem 后 `ipa-clock-query` 中断计数 = 1（modem 发了 clock-query）✅
+- 但 modem 仍在 running 后 ~40s **`APPS force stop`**（`sys_m_smsm_mpss.c:285`）❌
+
+## 16.2 关键证据：modem 从不发布它的 IPA service
+
+QRTR 枚举：node0（modem）只有 `service=43/66` 两个残余服务，**从无 `service=49
+instance=2`（modem 的 IPA service）**。而 AP 的 `ipa_client_new_server` 要等这个
+service 出现才发 `INIT_DRIVER` → 握手链在"modem 发布 IPA service"这一环就断了。
+
+## 16.3 主线 msm8998.dtsi IPA 节点（1123-1175）
+
+- 无 `qcom,gsi-loader`（legacy → SELF）
+- 有 `ipa-clock-query` / `ipa-setup-ready` 两个 SMP2P 中断（`ipa_smp2p_in 0/1`）
+- 有 `qcom,smem-states`（`ipa-clock-enabled-valid` / `ipa-clock-enabled`）
+
+⇒ 主线对 msm8998 的握手设计本身是"完整"的（SMP2P + smem），但**数据面从未端到端验证**。
+
+## 16.4 最终结论（诚实）
+
+msm8998 蜂窝数据面在主线上是"**设计存在、从未端到端验证、且与具体 modem 固件握手协议
+对不上**"的功能。上游作者（F(x)tec Pro1，同为 msm8998）也只做到"初始化 IPA 后 modem
+不崩"，数据连接（3G/LTE）从未跑通（postmarketOS wiki：Modem=Calls/SMS/Internet=Partial、
+Mobile data=Untested）。
+
+要跑通本机（nubia Z17S 定制 modem 固件），需逆向闭源 modem 固件的 IPA 握手协议，
+再让主线驱动适配 —— 工程量远超"补 QMI handler"，本质是逆向工程。
+
+## 16.5 G4 这条线的全部成果（已固化）
+
+1. ✅ S1 冻死点 = `icc_bulk_disable`（总线停顿）→ `pm_runtime_forbid` 根除
+2. ✅ `rmnet_ipa0` = QMAP 中间层，L3 叠 `rmnet0`；`ETH_P_MAP` 闸门
+3. ✅ 握手指示灯：`rmnet_ipa0` 在不在 = AP↔modem IPA QMI 握手走完没有
+4. ✅ SELF 模式 setup 成功（`gsi-loader=modem` 是死路，已回退 self）
+5. ✅ filter 断言（`ipa_ipfltr.init_done`）→ Step1a handler 后消失
+6. ✅ 推进到 `APPS force stop`，定位到"modem 不发布 service 49 + SMP2P 握手协议不匹配"
+7. ✅ 原厂协议完整核实（`modem-cfg-emb-pipe-flt` / QMI `INSTALL_FILTER_RULE` / `smp2pgpio` GPIO）
+8. ✅ 结论：主线数据面是未完成功能，端到端跑通需逆向 modem 固件
+
+## 16.6 建议
+
+停止盲目试错。两条现实路径：
+- **USB 4G dongle**（成熟方案，改 DTS 刷 boot 即可，不啃未完成功能）
+- **逆向 modem 固件握手**作为独立大项目立项（非本阶段可完成）
