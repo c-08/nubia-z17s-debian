@@ -785,3 +785,71 @@ modem 侧 QMI/filter 交互 + smp2pgpio→smp2p），工作量大，非本阶段
 - rmnet_ipa0 = QMAP 中间层，需叠 rmnet0；ETH_P_MAP 闸门
 - 握手指示灯（rmnet_ipa0 是否存在 = 握手走完没有）
 - gsi-loader=modem 已刷入（解决 modem 崩溃）
+
+---
+
+# 14 🔧 啃下 msm8998 数据面的完整方案（10-09，源码级已核实）
+
+## 14.1 原厂协议全貌（已从 msm-4.4 源码逐行核实）
+
+原厂 IPA v3.1（`drivers/platform/msm/ipa/ipa_v3/`）的 filter 协议，比之前判断的更清晰：
+
+### ① `modem-cfg-emb-pipe-flt` 的确切语义（ipa_flt.c:430）
+
+```c
+static bool ipa_flt_skip_pipe_config(int pipe)
+{
+	if (ipa_is_modem_pipe(pipe))          return true;   /* modem 拥有 → AP 不碰 */
+	if (ipa3_ctx->skip_ep_cfg_shadow[pipe]) return true;
+	if (ipa3_get_ep_mapping(IPA_CLIENT_APPS_WAN_PROD) == pipe
+		&& ipa3_ctx->modem_cfg_emb_pipe_flt)   return true;  /* ★ AP 跳过 WAN pipe */
+	return false;
+}
+```
+
+**含义：AP 不配置 `IPA_CLIENT_APPS_WAN_PROD`（AP→modem 数据 pipe）的 filter，留给 modem。**
+
+### ② modem 通过 QMI 安装 filter（ipa_qmi_service.c:158）
+
+```
+modem → AP:  QMI_IPA_INSTALL_FILTER_RULE_REQ   （安装 filter 规则）
+             QMI_IPA_FILTER_INSTALLED_NOTIF_REQ （filter 装完通知）
+AP → IPA:   ipa3_copy_ul_filter_rule_to_ipa()  （把规则写入 filter 表）
+```
+
+## 14.2 主线缺什么（已逐条对照）
+
+| 环节 | 主线 6.12 | 原厂 4.4 | 缺口 |
+|---|---|---|---|
+| filter 表初始化 | `ipa_table_setup()` 无条件配所有 filter_support 端点 | 跳过 modem/WAN pipe | ✅ 可改（加 skip 逻辑） |
+| QMI INSTALL_FILTER_RULE | ❌ 无此 handler | `ipa3_handle_install_filter_rule_req` | 🔴 需新增整套 QMI 消息 |
+| QMI FILTER_INSTALLED_NOTIF | ❌ | 有 | 🔴 需新增 |
+| filter 规则写入 IPA | 无（zero rule 而已） | `copy_ul_filter_rule_to_ipa` | 🔴 需新增 |
+
+## 14.3 啃的路径（按依赖顺序）
+
+**Step 1（先验证假设，最小改动）**：改 `ipa_table_setup()`，让 AP 跳过
+`IPA_ENDPOINT_AP_MODEM_TX` 的 filter（不把它计入 `ipa->filtered`，或 filter 配置时跳过它）。
+→ 验证 modem 是否不再 `ipa_ipfltr.init_done` 断言。
+
+**Step 2（若 Step1 不够）**：给主线 `ipa_qmi.c` 增加 `QMI_IPA_INSTALL_FILTER_RULE_REQ` 的
+handler（modem 请求时，把规则写到 filter 表）。需补 QMI 消息结构体（从原厂
+`ipa_qmi_service_v01.c` 移植 `ipa_install_fltr_rule_req_msg_v01`）。
+
+**Step 3（若还缺）**：补 `FILTER_INSTALLED_NOTIF` 等后续握手。
+
+## 14.4 工程量评估（诚实）
+
+- Step 1：**~30 行改动**，可热换 ipa.ko 验证，最值得先做
+- Step 2：需移植 QMI 消息结构体 + handler，**~200-400 行**，中等
+- Step 3：视 modem 实际行为而定，可能不需要
+
+**结论：不是"重写驱动"级别，而是"补一个 QMI handler + 一个 skip 逻辑"级别。有戏。**
+
+## 14.5 关键风险
+
+1. modem 的 `ipa_ipfltr.init_done` 断言，可能还有**别的**前置条件（不只是 filter 表），
+   Step 1 未必一击命中
+2. 原厂的 filter 表内存布局（`smem_restricted_bytes` + `v4_flt_nhash_ofst` 等）与主线
+   的 `ipa_mem` 布局**不一致**，移植 QMI 规则写入时要对齐两边的内存模型
+3. 主线是 GSI-only，原厂是 BAM+GSI 双栈，filter 写入路径的 DMA 方式不同
