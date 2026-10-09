@@ -853,3 +853,57 @@ handler（modem 请求时，把规则写到 filter 表）。需补 QMI 消息结
 2. 原厂的 filter 表内存布局（`smem_restricted_bytes` + `v4_flt_nhash_ofst` 等）与主线
    的 `ipa_mem` 布局**不一致**，移植 QMI 规则写入时要对齐两边的内存模型
 3. 主线是 GSI-only，原厂是 BAM+GSI 双栈，filter 写入路径的 DMA 方式不同
+
+---
+
+# 15 🎯 断言触发点精确定位：modem 发 INSTALL_FILTER_RULE(0x23)，主线没接
+
+## 15.1 决定性证据：原厂 QMI 消息 ID 表（ipa_qmi_service_v01.h:1628）
+
+| 消息 | msg_id | 主线 6.12 |
+|---|---|---|
+| INIT_MODEM_DRIVER_REQ | 0x0021 | ✅ `INIT_DRIVER`（0x21） |
+| **INSTALL_FILTER_RULE_REQ** | **0x0023** | ❌ 无 handler |
+| **FILTER_INSTALLED_NOTIF_REQ** | **0x0024** | ❌ 无 |
+| **IPA_CONFIG_REQ** | **0x0027** | ❌ 无 |
+| INIT_MODEM_DRIVER_CMPLT_REQ | 0x0035 | ✅ `DRIVER_INIT_COMPLETE`（0x35） |
+| INSTALL_FILTER_RULE_EX_REQ | 0x0037 | ❌ 无 |
+
+## 15.2 断言的精确触发链
+
+1. 主线**有** 0x21/0x35，握手能走到 INIT_DRIVER + DRIVER_INIT_COMPLETE
+2. modem 接着发 **INSTALL_FILTER_RULE_REQ(0x23)** 装 filter 规则
+3. 主线**无此 handler** → 不回响应 → modem 的 `ipa_ipfltr.init_done` 永不成立
+4. modem 断言 `ipa_ipfltr.init_done == TRUE failed` → crash
+
+**这就是 `ipa_sio.c:2107 IPA Assert: ipa_ipfltr.init_done == TRUE failed` 的精确来源。**
+
+## 15.3 啃的最终方案（精确到消息）
+
+给主线 `ipa_qmi.c` 增加 3 个 server handler（都是 modem→AP 的 QMI_REQUEST）：
+
+1. `INSTALL_FILTER_RULE_REQ`(0x23) → 解析 filter 规则 → 写 IPA filter 表 → 回 RESP
+2. `FILTER_INSTALLED_NOTIF_REQ`(0x24) → 回 RESP（简单确认）
+3. `IPA_CONFIG_REQ`(0x27) → 处理配置 → 回 RESP（可能不需要，视 modem 是否发）
+
+需移植的消息结构体（原厂 `ipa_qmi_service_v01.h`）：
+- `ipa_install_fltr_rule_req_msg_v01` / `_resp_msg_v01`
+- `ipa_fltr_installed_notif_req_msg_v01` / `_resp_msg_v01`
+- `ipa_config_req_msg_v01` / `_resp_msg_v01`
+
+## 15.4 诚实的工作量
+
+- **最小可行**：只加 `INSTALL_FILTER_RULE_REQ`(0x23) + `FILTER_INSTALLED_NOTIF`(0x24) 两个 handler，
+  先让 modem 收到"filter 已装"的响应，看它是否就不再断言。
+  → 但"写 filter 表"这一步（`copy_ul_filter_rule_to_ipa`）依赖原厂的内存布局，主线要对齐，
+    这部分是真工作量（filter 规则 → IPA 寄存器/共享内存的映射）。
+- 一个更轻的试探：**先只回"成功"空响应**（不真正写 filter 表），看 modem 是否只在乎"收到 ack"。
+  若 modem 只在乎 ack，则 ~50 行搞定；若它还要检查 filter 表内容，则需完整移植。
+
+## 15.5 下一步动作（Step 1a：最轻试探）
+
+改 `ipa_qmi.c`：加 `INSTALL_FILTER_RULE_REQ`(0x23) 和 `FILTER_INSTALLED_NOTIF_REQ`(0x24)
+两个 handler，**先返回空成功响应**（resp.result=SUCCESS，不写 filter 表），重编 ipa.ko 热换，
+看 modem 是否不再 `ipa_ipfltr.init_done` 断言、`rmnet_ipa0` 能否出现。
+
+这是成本最低、信息量最大的一枪。
