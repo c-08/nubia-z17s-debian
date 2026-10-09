@@ -658,3 +658,82 @@ msm8998 是**手机**，它的 modem 固件是 Android 时代产物，**按"mode
 | insmod 后重启 modem（modem 在 IPA 就位后启动） | modem `APPS force stop`（SMSM 状态不对） |
 
 ⇒ **纯软件时序救不了**，必须改 DTS 走 modem-init 协议。这是 G4 的终点：根因已定位，修复要动 boot。
+
+---
+
+# 12 🔴 冻死根因（icc_bulk_disable）已解决 + 握手死锁（10-09）
+
+## 12.1 冻死根因与 gsi-loader 无关，已用 pm_runtime_forbid 绕过
+
+把 `gsi-loader=modem` 刷入 sde18 后（DT 生效、不黑屏），insmod ipa 仍冻死。用 pass-1
+仪器化模块精确定位（logwatch 跨开机保留的 `kmsg-311a6ae1.log`）：
+
+```
+[226.83] ipa 1e40000.ipa: IPA driver initialized     ← probe 完成（MODEM 模式 goto done，不 setup）
+[227.46] Z17SIPA ipa_runtime_suspend: enter          ← probe 尾部 autosuspend 触发
+[227.76] rt_suspend -> ipa_power_disable -> clk_disable_unprepare
+[228.66] ipa_power_disable -> icc_bulk_disable(n=3)  ← 最后一行，冻死
+```
+
+**冻死点 = `ipa_power_disable → icc_bulk_disable`，和 S1 定位的完全同一个点。**
+
+机制：MODEM 模式 probe 走 `goto done`（不 setup，等 setup-ready 中断），但 probe 尾部
+`pm_runtime_put_autosuspend(dev)` **照常执行** → autosuspend → `ipa_power_disable` →
+`icc_bulk_disable` → 平台 interconnect 关断冻死（msm8998 的 interconnect 不能被关断）。
+
+### ✅ 修复（纯软件，只重编 ipa.ko，不刷 boot）
+
+改 `ipa_main.c` probe 尾部：
+
+```c
+done:
+	pm_runtime_mark_last_busy(dev);
+-	(void)pm_runtime_put_autosuspend(dev);
++	pm_runtime_forbid(dev);     /* 禁止 runtime suspend，永不到 ipa_power_disable */
+```
+
+实测：insmod 后 `runtime control=on`、`runtime_status=active`，设备**不冻死**，
+日志停在 `IPA driver initialized`（之后不再有 rt_suspend）。
+
+## 12.2 握手死锁（新问题）
+
+重启 modem 让它在 IPA 就位时重新握手，结果 modem `running` **稳定不崩**（gsi-loader=modem
+的直接收益），但：
+
+```
+/proc/interrupts:
+  142: ipa-clock-query   = 0   ← modem 从没问 AP 时钟状态
+  143: ipa-setup-ready   = 0   ← modem 从没发 setup-ready
+```
+
+⇒ `ipa_setup()` 永远不触发 ⇒ `rmnet_ipa0` 不出现。
+
+### 死锁机制（源码级）
+
+```
+AP   等 modem 的 ipa-setup-ready 中断 → 才 ipa_setup()
+modem 等 AP 的 ipa-clock-enabled SMEM 信号 → 才发 setup-ready
+ipa_smp2p_notify()（写 SMEM 信号）只在 modem 发 ipa-clock-query 中断时被调
+modem 却从不发 ipa-clock-query
+⇒ 双方互相等
+```
+
+`ipa_smp2p_notify()` 只有两个调用点：`ipa_smp2p_modem_clk_query_isr`（clock-query 中断）+
+`ipa_smp2p_panic_notifier`（AP 关机）。
+
+## 12.3 关键判断与下一步
+
+msm8998 的 modem 固件在 modem-init 模式下**不主动发 setup-ready/clock-query 中断**。
+它期望的握手协议可能不是主线这套"modem-init"语义。三个候选方向：
+
+1. **研究 msm8998 Android 4.4 内核的 IPA 握手协议**（原厂驱动怎么握手）
+2. **modem-init 下 AP 主动 notify**：改驱动，在 probe/config 后主动调 `ipa_smp2p_notify()`
+   （写 clock-enabled SMEM 信号），看 modem 是否因此发 setup-ready
+3. **回 SELF 模式**，聚焦修 `ipa_ipfltr.init_done` 断言（filter 表 init 顺序）
+
+## 12.4 当前可复现的稳定态
+
+- boot `d01438dd`（gsi-loader=modem 已刷入）
+- `ipa-nosusp.ko`（forbid 补丁）insmod 后 `control=on` 不冻死
+- modem `running` 稳定不崩
+- 卡在握手死锁，等进一步研究
