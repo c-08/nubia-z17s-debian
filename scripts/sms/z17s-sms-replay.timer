@@ -1,0 +1,10 @@
+[Unit]
+Description=Z17S SMS WeCom replay every 5 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+Unit=z17s-sms-replay.service
+
+[Install]
+WantedBy=timers.target

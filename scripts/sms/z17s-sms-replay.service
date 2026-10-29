@@ -1,0 +1,10 @@
+[Unit]
+Description=Z17S SMS WeCom replay (flush spooled messages)
+After=network-online.target dbussms.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /root/sms/wecom.py --replay
+StandardOutput=append:/root/sms/forward.log
+StandardError=append:/root/sms/forward.log

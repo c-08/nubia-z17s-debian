@@ -64,12 +64,22 @@ fi
 
 say "[5] 安装 systemd 单元"
 cp -f "$(dirname "$0")/dbussms.service" /etc/systemd/system/dbussms.service
+# 掉网期间没发出去的短信，靠这个定时器每 5 min 补发一次
+cp -f "$(dirname "$0")/z17s-sms-replay.service" /etc/systemd/system/z17s-sms-replay.service
+cp -f "$(dirname "$0")/z17s-sms-replay.timer" /etc/systemd/system/z17s-sms-replay.timer
+chmod 644 /etc/systemd/system/dbussms.service \
+           /etc/systemd/system/z17s-sms-replay.service \
+           /etc/systemd/system/z17s-sms-replay.timer
 systemctl daemon-reload
 systemctl enable --now dbussms.service
+systemctl enable --now z17s-sms-replay.timer
 sleep 2
 systemctl is-active dbussms.service
+systemctl is-enabled z17s-sms-replay.timer
 ss -lntp 2>/dev/null | grep ":$PORT" || say "    !! 端口 $PORT 未监听，看 journalctl -u dbussms"
 
 say "完成： http://<设备IP>:$PORT/"
 say "  转发记录： $DEST/sms.log"
 say "  运行日志： $DEST/run.log"
+say "  转发结果： $DEST/forward.log（带时间戳）"
+say "  待补发队列： $DEST/wecom-pending.jsonl（正常为空）"

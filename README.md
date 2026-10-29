@@ -19,7 +19,7 @@
 | 音频 | ✅ | `card 0: Nubia-Z17S` 已注册 |
 | Wi-Fi | ✅ **可用（10-29 修复）** | 能连 5GHz、硬件加密、下行实测 **1–11.5 MB/s**，累计 200+ MB 不崩。之前"高传输就卡死"的真凶**不是加密**，而是 `ath10k` 的 in-order RX 路径把「A-MSDU 跨两条指示」当成致命错误（`rx_confused`）⇒ RX 环枯竭 ⇒ 固件饿死崩 ⇒ ADSP 崩 ⇒ **modem 一起崩**。补丁只改 `htt_rx.c` 一处：`-EAGAIN` 丢这一小段而不置 `rx_confused`。见 [docs/WiFi-A-MSDU修复.md](docs/WiFi-A-MSDU修复.md) |
 | **蜂窝（手机卡）** | ✅ **可用（10-29 打通）** | **数据面已通，能真正上网**：下行 **241–366 KB/s**、`ping` 零丢包、DNS / HTTP / HTTPS 全通、**开机 172 秒全自动上线**（`TARGET=90`）。两个决定性修复：① **`insmod` 必须在 modem 注册之后**（早加载会让 modem 侧 GSI 通道不启动 ⇒ 假连接）；② **ep16 聚合旁路** —— IPA 硬件把下行多包聚合成一帧却只写第一个包的 QMAP 长度，`rmnet_map_ingress_handler()` 只 trim 到该长度就上送，**其余整段丢弃（下行只上送 38%）**，关掉聚合后 2.3 KB/s → 366 KB/s。见 [docs/蜂窝G5-数据面打通.md](docs/蜂窝G5-数据面打通.md) |
-| **短信** | ✅ **可用（10-29 打通）** | 收、发、转发全通。QMI WMS（service 5）在，ModemManager 1.24 完整接管。已装 **DbusSmsForwardCPlus**（`dbussms.service`）：网页 + HTTP API 在 **1102** 端口，`GET /api?telnum=…&smstext=…` 即可发短信，收到短信实时转发到 **企业微信群机器人**（key 单独存 `/root/sms/webhook.conf`，600 权限，不进仓库）。**原版在 MM 1.24 上完全不可用**（modem 路径写死 `Modem/0`、match 规则同样写死、收发共用一条 D-Bus 连接会挂死），已修 3 个 bug。见 [docs/短信转发与发送.md](docs/短信转发与发送.md) |
+| **短信** | ✅ **可用（10-29 打通）** | 收、发、转发全通。QMI WMS（service 5）在，ModemManager 1.24 完整接管。已装 **DbusSmsForwardCPlus**（`dbussms.service`）：网页 + HTTP API 在 **1102** 端口，`GET /api?telnum=…&smstext=…` 即可发短信，收到短信实时转发到 **企业微信群机器人**（key 单独存 `/root/sms/webhook.conf`，600 权限，不进仓库）。转发失败会重试 3 次并落待补发队列，`z17s-sms-replay.timer` 每 5 min 自动补发 —— **刚开机没网时不丢消息**。**原版在 MM 1.24 上完全不可用**（modem 路径写死 `Modem/0`、match 规则同样写死、收发共用一条 D-Bus 连接会挂死），已修 3 个 bug。见 [docs/短信转发与发送.md](docs/短信转发与发送.md) |
 | 摄像头 / NFC / 指纹 / 传感器 | ❓ | 未验证 |
 | 显示 | ⚠️ | 下半屏重叠（上游已知缺陷） |
 
