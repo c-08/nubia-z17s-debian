@@ -47,6 +47,21 @@ fi
 cp -f "$(dirname "$0")/forward.sh" "$DEST/forward.sh"
 chmod 755 "$DEST/forward.sh"
 
+# 企业微信转发（key 单独存 600，不进仓库）
+cp -f "$(dirname "$0")/wecom.py" "$DEST/wecom.py"
+chmod 755 "$DEST/wecom.py"
+if [ ! -f "$DEST/webhook.conf" ]; then
+    if [ -f "$(dirname "$0")/webhook.conf" ]; then
+        cp -f "$(dirname "$0")/webhook.conf" "$DEST/webhook.conf"
+    else
+        cp -f "$(dirname "$0")/webhook.conf.example" "$DEST/webhook.conf"
+        say "    !! 请编辑 $DEST/webhook.conf 填入 WECOM_KEY（不填则只落盘不转发）"
+    fi
+    chmod 600 "$DEST/webhook.conf"
+else
+    say "    已有 webhook.conf，保留原 key"
+fi
+
 say "[5] 安装 systemd 单元"
 cp -f "$(dirname "$0")/dbussms.service" /etc/systemd/system/dbussms.service
 systemctl daemon-reload

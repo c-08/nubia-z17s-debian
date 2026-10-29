@@ -1,6 +1,6 @@
 diff -ruN a/DbusSmsMethod/dbussmsmethod.h b/DbusSmsMethod/dbussmsmethod.h
 --- a/DbusSmsMethod/dbussmsmethod.h	2026-10-29 14:30:45.971138900 +0800
-+++ b/DbusSmsMethod/dbussmsmethod.h	2026-10-29 14:30:46.411725300 +0800
++++ b/DbusSmsMethod/dbussmsmethod.h	2026-10-29 14:44:10.604519400 +0800
 @@ -4,6 +4,7 @@
  #include <dbus/dbus.h>
  #include <regex>
@@ -124,7 +124,7 @@ diff -ruN a/DbusSmsMethod/dbussmsmethod.h b/DbusSmsMethod/dbussmsmethod.h
      dbus_message_iter_close_container(&iter, &arrayIter);
      DBusPendingCall* pendingCall;
 -    dbus_connection_send_with_reply(CreateSmsContentConnection, CreateSmsContentMessage, &pendingCall, -1);
-+    dbus_connection_send_with_reply(CreateSmsContentConnection, CreateSmsContentMessage, &pendingCall, 15000);
++    dbus_connection_send_with_reply(CreateSmsContentConnection, CreateSmsContentMessage, &pendingCall, 30000);
      dbus_connection_flush(CreateSmsContentConnection);
      dbus_message_unref(CreateSmsContentMessage);
      // 等待回复
@@ -144,7 +144,12 @@ diff -ruN a/DbusSmsMethod/dbussmsmethod.h b/DbusSmsMethod/dbussmsmethod.h
          }
          else {
              // 提取对象路径
-@@ -317,7 +391,8 @@
+@@ -313,11 +387,12 @@
+         dbus_message_unref(reply);
+     }
+     else {
+-        cerr << "Failed to get a reply." << endl;
++        cerr << "创建短信超时或无回复（D-Bus 30s 未返回）" << endl;
      }
      dbus_pending_call_unref(pendingCall);
      // 关闭连接
@@ -168,11 +173,11 @@ diff -ruN a/DbusSmsMethod/dbussmsmethod.h b/DbusSmsMethod/dbussmsmethod.h
              // 发送方法调用消息并等待回复
              DBusPendingCall* pendingCallSend;
 -            dbus_connection_send_with_reply(SendSmsContentConnection, SendSmsContentMessage, &pendingCallSend, -1);
-+            dbus_connection_send_with_reply(SendSmsContentConnection, SendSmsContentMessage, &pendingCallSend, 15000);
++            dbus_connection_send_with_reply(SendSmsContentConnection, SendSmsContentMessage, &pendingCallSend, 30000);
              dbus_connection_flush(SendSmsContentConnection);
              dbus_message_unref(SendSmsContentMessage);
              // 等待回复
-@@ -352,11 +427,17 @@
+@@ -352,26 +427,32 @@
              // 获取回复消息
              DBusMessage* sendreply = dbus_pending_call_steal_reply(pendingCallSend);
              if (sendreply) {
@@ -192,7 +197,9 @@ diff -ruN a/DbusSmsMethod/dbussmsmethod.h b/DbusSmsMethod/dbussmsmethod.h
                  }
                  dbus_message_unref(sendreply);
              }
-@@ -365,13 +446,13 @@
+             else {
+-                cerr << "Failed to get a sendreply." << endl;
++                cerr << "发送超时或无回复（D-Bus 30s 未返回；短信可能已发出，看 mmcli 状态）" << endl;
              }
              dbus_pending_call_unref(pendingCallSend);
              // 关闭连接
@@ -226,7 +233,7 @@ diff -ruN a/DbusSmsMethod/dbussmsmethod.h b/DbusSmsMethod/dbussmsmethod.h
              // 发送方法调用消息并等待回复
              DBusPendingCall* pendingCallDelete;
 -            dbus_connection_send_with_reply(DeleteSmsContentConnection, DeleteSmsContentMessage, &pendingCallDelete, -1);
-+            dbus_connection_send_with_reply(DeleteSmsContentConnection, DeleteSmsContentMessage, &pendingCallDelete, 15000);
++            dbus_connection_send_with_reply(DeleteSmsContentConnection, DeleteSmsContentMessage, &pendingCallDelete, 30000);
              dbus_connection_flush(DeleteSmsContentConnection);
              dbus_message_unref(DeleteSmsContentMessage);
              // 等待回复
@@ -244,7 +251,7 @@ diff -ruN a/DbusSmsMethod/dbussmsmethod.h b/DbusSmsMethod/dbussmsmethod.h
  #endif // DBUSSMSMETHOD_H
 diff -ruN a/InitWebPageAndApi/initwebpageandapi.h b/InitWebPageAndApi/initwebpageandapi.h
 --- a/InitWebPageAndApi/initwebpageandapi.h	2026-10-29 14:30:46.201637200 +0800
-+++ b/InitWebPageAndApi/initwebpageandapi.h	2026-10-29 14:30:46.609380300 +0800
++++ b/InitWebPageAndApi/initwebpageandapi.h	2026-10-29 14:44:10.886050900 +0800
 @@ -14,9 +14,14 @@
      // 获取参数值
      string telnum = req.get_param_value("telnum");
@@ -263,3 +270,13 @@ diff -ruN a/InitWebPageAndApi/initwebpageandapi.h b/InitWebPageAndApi/initwebpag
      res.set_content(response_text, "text/plain");
  }
  void setupApiPort() {
+@@ -95,7 +100,8 @@
+ 		    xhr.onreadystatechange = function () 
+ 			{
+ 				if (xhr.readyState === 4 && xhr.status === 200) {
+-				  alert('已发送');
++				  // Z17S: 原来无条件提示已发送，现在按接口真实返回
++				  alert(xhr.responseText === 'ok' ? '已发送' : '发送失败：' + xhr.responseText);
+ 				}
+ 		    };
+ 		    xhr.send();

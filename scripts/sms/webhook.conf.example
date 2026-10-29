@@ -1,0 +1,3 @@
+# 复制到 /root/sms/webhook.conf 并填真实 key，然后 chmod 600
+# 企业微信群机器人 key（群设置 → 群机器人 → 添加 → 复制 Webhook 地址里 key= 后面那串）
+WECOM_KEY=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
