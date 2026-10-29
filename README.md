@@ -19,11 +19,13 @@
 | 音频 | ✅ | `card 0: Nubia-Z17S` 已注册 |
 | Wi-Fi | ✅ **可用（10-29 修复）** | 能连 5GHz、硬件加密、下行实测 **1–11.5 MB/s**，累计 200+ MB 不崩。之前"高传输就卡死"的真凶**不是加密**，而是 `ath10k` 的 in-order RX 路径把「A-MSDU 跨两条指示」当成致命错误（`rx_confused`）⇒ RX 环枯竭 ⇒ 固件饿死崩 ⇒ ADSP 崩 ⇒ **modem 一起崩**。补丁只改 `htt_rx.c` 一处：`-EAGAIN` 丢这一小段而不置 `rx_confused`。见 [docs/WiFi-A-MSDU修复.md](docs/WiFi-A-MSDU修复.md) |
 | **蜂窝（手机卡）** | ✅ **可用（10-29 打通）** | **数据面已通，能真正上网**：下行 **241–366 KB/s**、`ping` 零丢包、DNS / HTTP / HTTPS 全通、**开机 172 秒全自动上线**（`TARGET=90`）。两个决定性修复：① **`insmod` 必须在 modem 注册之后**（早加载会让 modem 侧 GSI 通道不启动 ⇒ 假连接）；② **ep16 聚合旁路** —— IPA 硬件把下行多包聚合成一帧却只写第一个包的 QMAP 长度，`rmnet_map_ingress_handler()` 只 trim 到该长度就上送，**其余整段丢弃（下行只上送 38%）**，关掉聚合后 2.3 KB/s → 366 KB/s。见 [docs/蜂窝G5-数据面打通.md](docs/蜂窝G5-数据面打通.md) |
+| **短信** | ✅ **可用（10-29 打通）** | 收、发、转发全通。QMI WMS（service 5）在，ModemManager 1.24 完整接管。已装 **DbusSmsForwardCPlus**（`dbussms.service`）：网页 + HTTP API 在 **1102** 端口，`GET /api?telnum=…&smstext=…` 即可发短信，收到短信实时转发到 `/root/sms/forward.sh`。**原版在 MM 1.24 上完全不可用**（modem 路径写死 `Modem/0`、match 规则同样写死、收发共用一条 D-Bus 连接会挂死），已修 3 个 bug。见 [docs/短信转发与发送.md](docs/短信转发与发送.md) |
 | 摄像头 / NFC / 指纹 / 传感器 | ❓ | 未验证 |
 | 显示 | ⚠️ | 下半屏重叠（上游已知缺陷） |
 
 **结论：这是一台"USB 为主，蜂窝 + Wi-Fi 都可用"的机器。** 日常网络走 USB（0ms 延迟、稳定），
-出门 / 没 PC 时切蜂窝（366 KB/s，开机自动上线），同一 AP 下走 Wi-Fi（1–11.5 MB/s）。
+出门 / 没 PC 时切蜂窝（241–366 KB/s，开机 172 秒自动上线），同一 AP 下走 Wi-Fi（1–11.5 MB/s）。
+手机卡还能收发短信（1102 端口网页 / API + 实时转发）。
 **两个无线通路都踩过"看起来连着、其实已经死了"的坑**，判活请看计数器而不是链路状态。
 
 > 🔴 **刷机唯一通道 = TWRP（音量上+电源）+ `adb push` + `dd`**。
@@ -49,6 +51,7 @@
 | **⭐ 手机卡实测到哪一步了** —— G1/G2 上机全过程：IPA 满分通过、modem 拉回 online、LTE 注册成功、G3 卡点与死前现场 | [docs/蜂窝G1G2实测.md](docs/蜂窝G1G2实测.md) |
 | **⭐⭐ 手机卡最新进展（G3 已通）** —— 单进程 libqmi 三步连做拿到联通真实 IP；`ip link set rmnet_ipa0 up` 硬挂起的零日志尸检与源码级根因；下一步仪器化热换方案 | [docs/蜂窝G3与IPA数据面.md](docs/蜂窝G3与IPA数据面.md) |
 | **⭐⭐⭐ 手机卡已经能上网了（10-29）** —— 数据面打通全过程：`insmod` 时序、**ep16 聚合导致下行只上送 38%** 的定量证据与修复、366 KB/s 实测、开机自动上线、SIM 卡兼容性结论、全套红线 | [docs/蜂窝G5-数据面打通.md](docs/蜂窝G5-数据面打通.md) |
+| **⭐ 短信收发与转发（10-29）** —— 收 / 发 / 转发全通，1102 端口 API，原版 3 个 bug 的定位与修法 | [docs/短信转发与发送.md](docs/短信转发与发送.md) |
 | **重编内核** —— 必改的配置项、编译产物校验 | [kernel/README.md](kernel/README.md) |
 
 > 全部文档为中文，按"**症状 → 判据 → 根因 → 修法**"组织，每个结论都带实测数据。
@@ -110,6 +113,12 @@
 │       ├── build-ath10k-eagain.sh    编译脚本（WSL + aarch64-linux-gnu-）
 │       ├── z17s-ath10k-ko.service    ⭐ 开机复制单元（/lib/modules 每次开机会被还原）
 │       └── 99-z17s-ath10k.conf       硬件加密，**不要**写 cryptmode=1
+│   └── sms/                    短信收发与转发（见 docs/短信转发与发送.md）
+│       ├── install-dbussms.sh        一键装：依赖 → 源码 → 补丁 → 编译 → 部署 → 自启
+│       ├── z17s-dbussms.patch        ⭐ 修原版 3 个 bug（modem 路径 / match 规则 / 共享连接）
+│       ├── dbussms.service           systemd 单元（-fS --sendsmsapi=enable）
+│       ├── config.txt                配置模板（apiPort = 1102）
+│       └── forward.sh                Shell 转发钩子（默认落盘，附 TG/Bark/企微示例）
 ├── kernel/
 │   ├── README.md               内核重编要点（必改项 + 产物校验）
 │   ├── build-*.sh              上游构建脚本

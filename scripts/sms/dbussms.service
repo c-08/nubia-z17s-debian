@@ -1,0 +1,17 @@
+[Unit]
+Description=DbusSmsForwardCPlus (SMS forward + send API on :1102)
+After=ModemManager.service dbus.service network-online.target
+Wants=network-online.target
+Requires=ModemManager.service
+
+[Service]
+Type=simple
+WorkingDirectory=/root/sms
+ExecStart=/root/sms/DbusSmsForwardCPlus -fS --configfile=/root/sms/config.txt --sendsmsapi=enable
+Restart=always
+RestartSec=5
+StandardOutput=append:/root/sms/run.log
+StandardError=append:/root/sms/run.log
+
+[Install]
+WantedBy=multi-user.target
