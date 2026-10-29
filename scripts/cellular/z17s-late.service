@@ -1,11 +1,11 @@
 [Unit]
-Description=Z17S late IPA bring-up (reproduce 2026-10-27 22:38 success timing)
+Description=Z17S late IPA bring-up (modem is up at ~16s; TARGET only gates when we start trying)
 After=rmtfs.service tqftpserv.service multi-user.target
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-Environment=TARGET=410
+Environment=TARGET=90
 Environment=KO=/root/ipa-new-147.ko
 Environment=PONLY=min
 ExecStart=/bin/sh /root/z17s-late.sh

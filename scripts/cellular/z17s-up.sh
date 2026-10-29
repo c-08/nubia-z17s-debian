@@ -136,7 +136,26 @@ if [ "$reg" != 1 ]; then
 		grep -E "Registration state|PS:|Status:|Description" | tr -s ' \t' ' ' | tr '\n' '|')"
 	say "     UIM: $(timeout 20 qmicli -d qrtr://0 -p --uim-get-card-status 2>/dev/null |
 		grep -E "Slot \[|Card state|Application state|PIN1 state" | tr -s ' \t' ' ' | tr '\n' '|')"
-	die "modem 未注册（卡/信号/APN？）"
+	# Z17S round 176: 2026-10-29 实测 --dms-set-operating-mode=reset 无效，
+	# low-power -> online 做一次完整射频循环，75 s 内就能恢复 registered。
+	# 开机时 modem 停在 shutting-down 之后偶发"看得见小区但不 attach"，这招救得回来。
+	say "  尝试射频循环（low-power -> online）"
+	timeout 25 qmicli -d qrtr://0 -p --dms-set-operating-mode=low-power >/dev/null 2>&1
+	sleep 8
+	timeout 25 qmicli -d qrtr://0 -p --dms-set-operating-mode=online >/dev/null 2>&1
+	i=0; reg=0
+	while [ $i -lt 30 ]; do
+		if timeout 20 qmicli -d qrtr://0 -p --nas-get-serving-system 2>/dev/null |
+		   grep -q "Registration state: 'registered'"; then
+			reg=1; break
+		fi
+		i=$((i + 1)); sleep 4
+	done
+	if [ "$reg" != 1 ]; then
+		say "     射频循环后仍未注册"
+		die "modem 未注册（卡/信号/APN？）"
+	fi
+	say "  射频循环后注册成功（uptime $(cut -d. -f1 /proc/uptime)s）"
 fi
 say "  registered（uptime $(cut -d. -f1 /proc/uptime)s）"
 
