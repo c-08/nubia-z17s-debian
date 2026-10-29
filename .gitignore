@@ -12,6 +12,9 @@ device/etc/NetworkManager/system-connections/*.nmconnection
 id_*
 *password*
 *secret*
+# 但 sshd 的 drop-in 只是配置项、不含任何凭据，允许入库
+# （否则 scripts/ssh/ 整个目录会被 *password* 吞掉，文档里引用的文件其实不在仓库里）
+!scripts/ssh/99-z17s-password.conf
 
 # ============================================================
 # Windows 上无法索引的符号链接
