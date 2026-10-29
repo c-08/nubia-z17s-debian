@@ -18,11 +18,12 @@
 | 蓝牙 | ✅ | 设备树硬编码的 NV 与 persist 一致，无需改动 |
 | 音频 | ✅ | `card 0: Nubia-Z17S` 已注册 |
 | Wi-Fi | ❌ 不可用 | 能连上，但**固件会崩溃**。2026-09-25 已把最后一条路（`ath10k` 软解）**实测打完**：软解确实生效、WPA2 握手成功，但固件不肯发软件加密的帧 ⇒ 仍不可用。见 [docs/W1实验结果.md](docs/W1实验结果.md) |
-| 蜂窝（手机卡） | ⚠️ **数据呼叫已通，数据面未通** | 2026-09-30 上机实测：**G3 通关** —— 单进程 libqmi 连做 DPM-open + WDS-bind + WDS-start，`start_network` 成功、拿到联通真实地址 `10.118.65.25/30`（网关 `.26`，DNS 120.80.80.80 / 221.5.88.88）。**只剩数据面**：`ip link set rmnet_ipa0 up` 会**硬挂起整机**（零内核输出 + 看门狗约 35 s 复位，复现 2/2），根因锁定 `ipa_runtime_resume` 的 `ipa_endpoint_resume()`。见 [docs/蜂窝G3与IPA数据面.md](docs/蜂窝G3与IPA数据面.md) |
+| **蜂窝（手机卡）** | ✅ **可用（10-29 打通）** | **数据面已通，能真正上网**：下行 **366 KB/s**、`ping` 零丢包、DNS / HTTP / HTTPS 全通、开机自动上线（约 7 分钟）。两个决定性修复：① **`insmod` 必须在 modem 注册之后**（早加载会让 modem 侧 GSI 通道不启动 ⇒ 假连接）；② **ep16 聚合旁路** —— IPA 硬件把下行多包聚合成一帧却只写第一个包的 QMAP 长度，`rmnet_map_ingress_handler()` 只 trim 到该长度就上送，**其余整段丢弃（下行只上送 38%）**，关掉聚合后 2.3 KB/s → 366 KB/s。见 [docs/蜂窝G5-数据面打通.md](docs/蜂窝G5-数据面打通.md) |
 | 摄像头 / NFC / 指纹 / 传感器 | ❓ | 未验证 |
 | 显示 | ⚠️ | 下半屏重叠（上游已知缺陷） |
 
-**结论：这是一台"USB 连着用"的机器。** 网络走 USB，屏幕当辅助，服务的稳定性不依赖 Wi-Fi。
+**结论：这是一台"USB 为主、蜂窝可用"的机器。** 日常网络走 USB（0ms 延迟、稳定），
+出门 / 没 PC 时切蜂窝（366 KB/s，开机自动上线）。Wi-Fi 仍然不可用。
 
 > 🔴 **刷机唯一通道 = TWRP（音量上+电源）+ `adb push` + `dd`**。
 > 本机 fastboot **不能刷分区**（实测 `flash`/`download` 全是 `unknown command`，且 `reboot recovery` 回 `OKAY` 是假信号）。
@@ -45,6 +46,7 @@
 | **⭐ 手机卡到底能不能救** —— 可行性评估：证据链、三道门、逐日计划、风险止损 | [docs/蜂窝可行性评估.md](docs/蜂窝可行性评估.md) |
 | **⭐ 手机卡实测到哪一步了** —— G1/G2 上机全过程：IPA 满分通过、modem 拉回 online、LTE 注册成功、G3 卡点与死前现场 | [docs/蜂窝G1G2实测.md](docs/蜂窝G1G2实测.md) |
 | **⭐⭐ 手机卡最新进展（G3 已通）** —— 单进程 libqmi 三步连做拿到联通真实 IP；`ip link set rmnet_ipa0 up` 硬挂起的零日志尸检与源码级根因；下一步仪器化热换方案 | [docs/蜂窝G3与IPA数据面.md](docs/蜂窝G3与IPA数据面.md) |
+| **⭐⭐⭐ 手机卡已经能上网了（10-29）** —— 数据面打通全过程：`insmod` 时序、**ep16 聚合导致下行只上送 38%** 的定量证据与修复、366 KB/s 实测、开机自动上线、SIM 卡兼容性结论、全套红线 | [docs/蜂窝G5-数据面打通.md](docs/蜂窝G5-数据面打通.md) |
 | **重编内核** —— 必改的配置项、编译产物校验 | [kernel/README.md](kernel/README.md) |
 
 > 全部文档为中文，按"**症状 → 判据 → 根因 → 修法**"组织，每个结论都带实测数据。
@@ -96,7 +98,7 @@
 │   ├── install-logwatch.sh     部署三层日志与取证体系（幂等，可重复跑）
 │   ├── backup-system.sh        设备侧备份 T1（boot + persist + 配置 + 包列表，20 秒）
 │   ├── flash-boot-cgroupbpf.sh 安全刷 boot 分区（备份 → 写入 → 回读校验 → 装模块）
-│   └── cellular/               手机卡数据通路工具（见 docs/蜂窝G3与IPA数据面.md）
+│   └── cellular/               手机卡数据通路工具（见 docs/蜂窝G5-数据面打通.md）
 │       ├── qmi_up.py           ⭐ 单进程 libqmi：DPM-open + WDS-bind + WDS-start 一次连通
 │       ├── qrtr_services.py    枚举 modem 上全部 QRTR 服务（只读）
 │       ├── g3_linkup.sh        ⚠️ 危险：`ip link set rmnet_ipa0 up` 单变量实验（每步 sync + kmsg 标记）
@@ -109,7 +111,8 @@
     ├── 项目总览.md             ⭐ 一页看完：项目地址 + 设备信息 + Wi-Fi/蜂窝为什么修不好
     ├── 蜂窝可行性评估.md       ⭐ 手机卡上网：从"无解"改判为"值得一试"（证据 + 三道门 + 逐日计划）
     ├── 蜂窝G1G2实测.md         ⭐ 手机卡上机实测：IPA 满分通过、modem 拉回 online、LTE 注册成功、G3 卡点
-    ├── 蜂窝G3与IPA数据面.md    ⭐⭐ 最新：G3 通关（单进程 libqmi 拿到联通真实 IP）+ `rmnet_ipa0 up` 硬挂起尸检与根因
+    ├── 蜂窝G3与IPA数据面.md    ⭐⭐ G3 通关（单进程 libqmi 拿到联通真实 IP）+ `rmnet_ipa0 up` 硬挂起尸检与根因
+    ├── 蜂窝G5-数据面打通.md    ⭐⭐⭐ 最新：10-29 数据面打通，能真正上网（366 KB/s、开机自动）+ ep16 聚合根因
     ├── boot镜像签名与恢复.md   🔴 改 boot 前必读：改了就必须重签，否则黑屏；含本地验签与恢复通道
     ├── W1实验结果.md            ⭐ Wi-Fi 软解上机实测：成功的那一半与失败的那一半（含日志证据）
     ├── WiFi与蜂窝修复方案.md   Wi-Fi 软解 / 蜂窝绕行的方案评审与实施清单（含"只换 .ko，不刷 boot"）
@@ -190,20 +193,20 @@ ssh -i <你的密钥> root@192.168.137.2
 
 ## 已知问题
 
-Wi-Fi 与关机语义**已定性，别再重复投入**；**蜂窝 2026-09-25 改判为"值得一试"**（见 [docs/蜂窝可行性评估.md](docs/蜂窝可行性评估.md)）。
-完整分析见 [docs/项目总览.md](docs/项目总览.md)。
+Wi-Fi 与关机语义**已定性，别再重复投入**；**蜂窝 2026-10-29 已打通，能真正上网**
+（见 [docs/蜂窝G5-数据面打通.md](docs/蜂窝G5-数据面打通.md)）。完整分析见 [docs/项目总览.md](docs/项目总览.md)。
 
 - **Wi-Fi 每次开机活不过约 7 分钟**，崩溃后只能重启恢复。根因是 `mac80211.ko` 里的自研钩子
   `key_hw_accel` 强制硬件解密，而 `cipher=0xfac04` 就是标准 WPA2 —— 几乎所有现代路由器都踩中；
   崩的是 **modem（Q6）里的 Wi-Fi 固件自己 assert**。主线 6.17 与一加 7T（同款 WCN3990）同样必崩，
   **没有可移植的修复**。处置：`nmcli radio wifi off` 直接关掉止损（负载 1.9 → 0.28）。
-- **蜂窝（手机卡）上不了网**，但**不是"主线不支持蜂窝"**：modem 是活的、SIM 也认得出来，
-  被卡住的是**数据面** —— MSM8998 的 modem 数据**必须经过 IPA 加速器**，而 `ipa.ko` 一加载就
-  把本机重启（`# IPA resets this NX595J with the current 6.12 device tree`），已进黑名单。
-  没有 IPA 就没有 `rmnet_data0`。**换 OpenWrt 也救不了**（同一套内核驱动，见总览 §5.4）。
-  ⚠️ **2026-09-25 改判**：上面的判断成立，但"无解"的推论不成立 —— 主线**原生支持** `qcom,msm8998-ipa`（IPA v3.1）、
-  本机设备树 IPA 节点**接线完整**（固件也在设备上）、modem 已在 QRTR 上广播 **IPA control service**、
-  且**本机 Android 下 IPA 数据面初始化成功过**（原始日志仍在）。⇒ 值得一试，见 [docs/蜂窝可行性评估.md](docs/蜂窝可行性评估.md)。
+- ~~**蜂窝（手机卡）上不了网**~~ → **✅ 2026-10-29 已解决，能真正上网**（下行 366 KB/s、开机自动上线）。
+  历史脉络：MSM8998 的 modem 数据**必须经过 IPA 加速器**，早期 `ipa.ko` 一加载就把本机重启
+  （`# IPA resets this NX595J with the current 6.12 device tree`），因此进了黑名单；09-25 改判"值得一试"
+  （主线原生支持 `qcom,msm8998-ipa`、设备树接线完整、Android 下成功过）；09-30 **G3 通关**
+  （单进程 libqmi 拿到联通真实 IP）；10-29 **G5 打通数据面**。
+  ⇒ 卡住的从来不是"主线不支持蜂窝"，而是两个很具体的坑：**`insmod` 时机** 和 **ep16 聚合**。
+  详见 [docs/蜂窝G5-数据面打通.md](docs/蜂窝G5-数据面打通.md)。
 - **关机"慢"的真相**：一次干净关机其实只要 **约 11 秒**，其中 **10.7 秒在等 `docker.service` 停** ——
   关机前 `systemctl stop docker` 能压到 1~2 秒。另外按电源键 **点一下就该松手**
   （logind 实测 `HandlePowerKeyLongPress=ignore`，"按多久"软件层完全不管；

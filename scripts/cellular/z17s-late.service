@@ -1,0 +1,17 @@
+[Unit]
+Description=Z17S late IPA bring-up (reproduce 2026-10-27 22:38 success timing)
+After=rmtfs.service tqftpserv.service multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=TARGET=410
+Environment=KO=/root/ipa-new-147.ko
+Environment=PONLY=min
+ExecStart=/bin/sh /root/z17s-late.sh
+TimeoutStartSec=1500
+StandardOutput=append:/root/z17s-late.log
+StandardError=append:/root/z17s-late.log
+
+[Install]
+WantedBy=multi-user.target
