@@ -1,0 +1,48 @@
+diff --git a/drivers/net/wireless/ath/ath10k/htt_rx.c b/drivers/net/wireless/ath/ath10k/htt_rx.c
+index 42b7596..0f17eda 100644
+--- a/drivers/net/wireless/ath/ath10k/htt_rx.c
++++ b/drivers/net/wireless/ath/ath10k/htt_rx.c
+@@ -783,6 +783,9 @@ static int ath10k_htt_rx_pop_paddr64_list(struct ath10k_htt *htt,
+ int ath10k_htt_rx_alloc(struct ath10k_htt *htt)
+ {
+ 	struct ath10k *ar = htt->ar;
++
++	pr_info("Z17S ath10k: split-A-MSDU tolerance active (in_ord_rx=%d)\n",
++		(bool)htt->rx_ring.in_ord_rx);
+ 	dma_addr_t paddr;
+ 	void *vaddr, *vaddr_ring;
+ 	size_t size;
+@@ -3148,6 +3151,9 @@ static void ath10k_htt_rx_delba(struct ath10k *ar, struct htt_resp *resp)
+ 	spin_unlock_bh(&ar->data_lock);
+ }
+ 
++/* Z17S round 171: how many partial (split) A-MSDUs we have dropped. */
++static unsigned long z17s_amsdu_dropped;
++
+ static int ath10k_htt_rx_extract_amsdu(struct ath10k_hw_params *hw,
+ 				       struct sk_buff_head *list,
+ 				       struct sk_buff_head *amsdu)
+@@ -3339,7 +3345,22 @@ static int ath10k_htt_rx_in_ord_ind(struct ath10k *ar, struct sk_buff *skb)
+ 			ath10k_htt_rx_h_enqueue(ar, &amsdu, status);
+ 			break;
+ 		case -EAGAIN:
+-			fallthrough;
++			/* Z17S round 171: WCN3990/HL1.0 splits a large A-MSDU
++			 * across two in-order indications, so the MSDU list ends
++			 * without RX_MSDU_END_INFO0_LAST_MSDU.  Upstream treats
++			 * that as fatal: rx_confused = true, after which every
++			 * later indication returns -EIO, the RX ring drains and
++			 * the firmware asserts ~160 s later (and takes the ADSP,
++			 * hence the modem, with it).  Dropping one partial A-MSDU
++			 * costs a couple of packets that TCP retransmits.
++			 */
++			z17s_amsdu_dropped++;
++			if (z17s_amsdu_dropped <= 5 ||
++			    !(z17s_amsdu_dropped % 200))
++				pr_info("Z17S: dropped partial A-MSDU #%lu (msdus=%u)\n",
++					z17s_amsdu_dropped, skb_queue_len(&list));
++			__skb_queue_purge(&list);
++			return 0;
+ 		default:
+ 			/* Should not happen. */
+ 			ath10k_warn(ar, "failed to extract amsdu: %d\n", ret);

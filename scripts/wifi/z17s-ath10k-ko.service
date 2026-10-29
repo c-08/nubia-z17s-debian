@@ -1,0 +1,18 @@
+[Unit]
+Description=Z17S install patched ath10k_core.ko (RX A-MSDU tolerance)
+# /lib/modules is repopulated from the boot ramdisk on every boot, so any
+# out-of-tree module we drop there is reverted.  Copy ours back before
+# anything can autoload ath10k -- same trick as z17s-qmi-helper.service.
+DefaultDependencies=no
+After=local-fs.target
+Before=systemd-modules-load.service systemd-udev-trigger.service z17s-wifi-load.service
+ConditionPathExists=/root/ath10k_core.ko.eagain
+
+[Service]
+Type=oneshot
+ExecStart=/bin/cp -f /root/ath10k_core.ko.eagain /lib/modules/6.12.95+/kernel/drivers/net/wireless/ath/ath10k/ath10k_core.ko
+ExecStart=/bin/sh -c 'echo Z17SATH10K unit-copied $(md5sum /lib/modules/6.12.95+/kernel/drivers/net/wireless/ath/ath10k/ath10k_core.ko | cut -c1-16) > /dev/kmsg'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target
