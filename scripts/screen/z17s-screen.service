@@ -1,0 +1,12 @@
+[Unit]
+Description=Z17S screen off (backlight only, no DRM commit)
+
+[Service]
+Type=oneshot
+# 等显示栈初始化完再关，否则会被 mdss 的初始亮度覆盖
+ExecStartPre=/bin/sleep 8
+ExecStart=/usr/local/sbin/z17s-screen off
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

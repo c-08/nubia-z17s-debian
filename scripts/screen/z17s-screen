@@ -1,0 +1,36 @@
+#!/bin/sh
+# Z17S 息屏开关
+#
+# ★ 只动背光，绝不碰 fb0/blank —— 本机 DPU 的原子提交扛不住 blank=4，
+#   写下去立刻报 vblank timeout / wait for commit done -110 / frame done timeout。
+#   背光是纯 LED 亮度，走的是 backlight 类，不触发 DRM commit，零报错。
+#
+# 用法：z17s-screen on|off|status
+BL=/sys/class/backlight/backlight
+SAVED=/run/z17s-screen.brightness
+DEFAULT=2048
+
+case "$1" in
+on)
+	v=$(cat "$SAVED" 2>/dev/null)
+	case "$v" in ''|*[!0-9]*) v=$DEFAULT ;; esac
+	[ "$v" -gt 0 ] || v=$DEFAULT
+	echo "$v" > "$BL/brightness"
+	echo "screen: on  brightness=$(cat "$BL/brightness")/$DEFAULT"
+	;;
+off)
+	cur=$(cat "$BL/brightness" 2>/dev/null)
+	case "$cur" in ''|*[!0-9]*) cur=0 ;; esac
+	[ "$cur" -gt 0 ] && echo "$cur" > "$SAVED"
+	echo 0 > "$BL/brightness"
+	echo "screen: off 亮度已存 $(cat "$SAVED" 2>/dev/null)"
+	;;
+status)
+	echo "brightness=$(cat "$BL/brightness" 2>/dev/null)/$(cat "$BL/max_brightness" 2>/dev/null)"
+	echo "saved=$(cat "$SAVED" 2>/dev/null)"
+	;;
+*)
+	echo "用法: $0 on|off|status" >&2
+	exit 1
+	;;
+esac

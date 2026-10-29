@@ -22,6 +22,7 @@
 | **短信** | ✅ **可用（10-29 打通）** | 收、发、转发全通。QMI WMS（service 5）在，ModemManager 1.24 完整接管。已装 **DbusSmsForwardCPlus**（`dbussms.service`）：网页 + HTTP API 在 **1102** 端口，`GET /api?telnum=…&smstext=…` 即可发短信，收到短信实时转发到 **企业微信群机器人**（key 单独存 `/root/sms/webhook.conf`，600 权限，不进仓库）。转发失败会重试 3 次并落待补发队列，`z17s-sms-replay.timer` 每 5 min 自动补发 —— **刚开机没网时不丢消息**。**原版在 MM 1.24 上完全不可用**（modem 路径写死 `Modem/0`、match 规则同样写死、收发共用一条 D-Bus 连接会挂死），已修 3 个 bug。见 [docs/短信转发与发送.md](docs/短信转发与发送.md) |
 | 摄像头 / NFC / 指纹 / 传感器 | ❓ | 未验证 |
 | 显示 | ⚠️ | 下半屏重叠（上游已知缺陷） |
+| **息屏运行** | ✅ **可用（10-29）** | `z17s-screen off` 关背光息屏、`on` 恢复，开机由 `z17s-screen.service` 自动执行。**只动背光，绝不用 `fb0/blank`** —— 本机 DPU 原子提交扛不住 `blank=4`，写下去立刻报 `vblank timeout` / `commit done -110`。见 [docs/息屏与背光.md](docs/息屏与背光.md) |
 
 **结论：这是一台"USB 为主，蜂窝 + Wi-Fi 都可用"的机器。** 日常网络走 USB（0ms 延迟、稳定），
 出门 / 没 PC 时切蜂窝（2.85–3.0 Mbit/s，卡限速 3M，开机 172 秒自动上线），同一 AP 下走 Wi-Fi（15–18.5 MB/s）。
@@ -52,6 +53,7 @@
 | **⭐⭐ 手机卡最新进展（G3 已通）** —— 单进程 libqmi 三步连做拿到联通真实 IP；`ip link set rmnet_ipa0 up` 硬挂起的零日志尸检与源码级根因；下一步仪器化热换方案 | [docs/蜂窝G3与IPA数据面.md](docs/蜂窝G3与IPA数据面.md) |
 | **⭐⭐⭐ 手机卡已经能上网了（10-29）** —— 数据面打通全过程：`insmod` 时序、**ep16 聚合导致下行只上送 38%** 的定量证据与修复、332–374 KB/s 实测、开机自动上线、SIM 卡兼容性结论、全套红线 | [docs/蜂窝G5-数据面打通.md](docs/蜂窝G5-数据面打通.md) |
 | **⭐ 短信收发与转发（10-29）** —— 收 / 发 / 转发全通，1102 端口 API，原版 3 个 bug 的定位与修法 | [docs/短信转发与发送.md](docs/短信转发与发送.md) |
+| **⭐ 息屏运行（10-29）** —— 关背光而不是 blank；DPU commit 超时的实测证据与开关脚本 | [docs/息屏与背光.md](docs/息屏与背光.md) |
 | **重编内核** —— 必改的配置项、编译产物校验 | [kernel/README.md](kernel/README.md) |
 
 > 全部文档为中文，按"**症状 → 判据 → 根因 → 修法**"组织，每个结论都带实测数据。
@@ -121,6 +123,9 @@
 │       ├── forward.sh                Shell 转发钩子（落盘 + 调 wecom.py）
 │       ├── wecom.py                  ⭐ 企业微信群机器人推送（json.dumps 构造，中文安全）
 │       └── webhook.conf.example      机器人 key 模板（真 key 只存设备上，600）
+│   └── screen/                 息屏与背光（见 docs/息屏与背光.md）
+│       ├── z17s-screen               ⭐ on/off/status（只动背光，不碰 fb0/blank）
+│       └── z17s-screen.service       开机自动息屏（sleep 8 等显示栈就绪）
 ├── kernel/
 │   ├── README.md               内核重编要点（必改项 + 产物校验）
 │   ├── build-*.sh              上游构建脚本
