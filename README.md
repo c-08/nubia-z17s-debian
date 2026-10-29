@@ -207,8 +207,9 @@ sudo bash scripts/install-on-device.sh
 ### 第 3 步：登录
 
 ```bash
-ssh z17s          # 需要先在 ~/.ssh/config 里配别名，或者：
+ssh z17s                        # 需要先在 ~/.ssh/config 里配别名（走 USB 192.168.137.2），或者：
 ssh -i <你的密钥> root@192.168.137.2
+ssh root@192.168.137.2          # 也可以直接用 root 密码登录（已放开，见访问入口速查 §2.2）
 ```
 
 ---
